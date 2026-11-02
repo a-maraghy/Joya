@@ -27,8 +27,8 @@ Claude Code and answer its questions.
 | HTTPS | not needed (it never leaves this computer) | free Let's Encrypt certificate; a self-made one when there is no domain |
 
 Then it shows a short summary and asks **Install now?**. At the end it prints a one-time
-link where you create your admin account (username, password and an authenticator-app
-code).
+link where you create your admin account: a username and a password. That is all you need
+to sign in -- no authenticator app.
 
 ## What it does
 
@@ -73,6 +73,9 @@ macOS is not supported on the computer itself yet; install it on a cloud server 
 
 ## Good to know
 
+- **Sign-in is a username and a password.** Approving a sensitive action asks for the
+  password again. On a cloud server, choose a strong password: wrong guesses are blocked
+  after five tries.
 - **Only this computer can open it** in the local install: the panel listens on
   `127.0.0.1` alone, so nothing on your network can reach it.
 - **Agents need a Claude credential** (a Claude subscription token or an API key). You

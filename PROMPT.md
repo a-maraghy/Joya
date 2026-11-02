@@ -55,8 +55,8 @@ Then:
    what you safely can (DNS not pointing yet, port 80 closed in the cloud provider's
    firewall, a busy port) and run it again -- running it again is always safe.
 7. When it finishes, give me the one-time setup link it printed and tell me:
-   open it, choose a username and password, and scan the QR code with an authenticator
-   app (Google Authenticator, Microsoft Authenticator, 1Password...).
+   open it, and choose a username and a password (at least 12 characters). That is all
+   I need to sign in from then on.
 
 Rules:
 - Never ask me for passwords, tokens or API keys in this chat. The Claude credential for

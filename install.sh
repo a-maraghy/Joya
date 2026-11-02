@@ -181,6 +181,8 @@ install -d /etc/systemd/system/moni-dashboard.service.d
   echo "Environment=MONI_BIND=127.0.0.1"
   echo "Environment=MONI_PORT=$JOYA_PORT"
   echo "Environment=MONI_PUBLIC_HOST=$HOST"
+  # Sign in with a username and password only: no authenticator app, no passkeys.
+  echo "Environment=MONI_PASSWORD_ONLY=1"
   if [[ $JOYA_WHERE == local ]]; then
     echo "Environment=MONI_PUBLIC_PORT=$JOYA_PORT"
     echo "Environment=MONI_LOCAL_HTTP=1"
@@ -305,7 +307,7 @@ printf '\n%sMint OS is installed.%s\n\n' "$G" "$N"
 if [[ -n $TOKEN && $code == 302 ]]; then
   printf 'Open this link to create your admin account (it works once):\n\n  %s%s/setup?token=%s%s\n\n' "$B" "$URL" "$TOKEN" "$N"
   [[ $JOYA_WHERE == cloud && -z $JOYA_DOMAIN ]] && printf 'Your browser will warn about the certificate once: choose Advanced, then Continue.\n'
-  printf 'You will need an authenticator app (Google Authenticator, Microsoft Authenticator, 1Password...) for the 6-digit code.\n'
+  printf 'Choose a username and a password (at least 12 characters) -- that is all you need to sign in.\n'
 else
   printf 'Open %s and sign in with your admin account.\n' "$URL"
 fi
