@@ -45,8 +45,8 @@ TTY=/dev/tty
 ask() { # ask VAR "Question" "default"
   local var=$1 q=$2 def=${3-} a=
   if [[ -n ${!var+x} ]]; then return; fi
-  # No keyboard on a re-run: the earlier answer stands.
-  if [[ -z $TTY && $HAVE_PREV == 1 ]]; then printf -v "$var" '%s' "$def"; return; fi
+  # No keyboard: the earlier answer (a re-run) or the default stands.
+  if [[ -z $TTY && ( $HAVE_PREV == 1 || -n $def ) ]]; then printf -v "$var" '%s' "$def"; return; fi
   [[ -n $TTY ]] || die "no keyboard to ask \"$q\" -- set $var=... (see the top of install.sh)."
   if [[ -n $def ]]; then printf '%s%s%s [%s]: ' "$B" "$q" "$N" "$def" >"$TTY"; else printf '%s%s%s: ' "$B" "$q" "$N" >"$TTY"; fi
   IFS= read -r a <"$TTY" || true
