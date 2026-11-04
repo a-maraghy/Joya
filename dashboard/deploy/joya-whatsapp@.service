@@ -1,0 +1,60 @@
+# /etc/systemd/system/joya-whatsapp@.service
+#
+# One instance per WhatsApp channel: `systemctl start joya-whatsapp@support`.
+# Everything instance-specific is in /opt/joya-agents/channels/%i, written by
+# the dashboard through joya-helper.
+
+[Unit]
+Description=JOYA WhatsApp channel %i
+Documentation=https://github.com/a-maraghy/Joya
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=joyaagent
+Group=joyaagent
+WorkingDirectory=/opt/joya-agents/whatsapp
+
+Environment=HOME=/opt/joya-agents/shared/home
+Environment=PATH=/opt/joya-agents/runtime/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=NODE_ENV=production
+# Server Claude Code, not the SDK-bundled 2.1.139 (rejects newer models).
+Environment=CLAUDE_CLI_PATH=/usr/bin/claude
+
+# The Claude credential, shared with every agent.
+EnvironmentFile=-/opt/joya-agents/shared/claude-auth.env
+# Channel identity, allowed numbers and add-on switches.
+EnvironmentFile=/opt/joya-agents/channels/%i/bridge.env
+
+ExecStart=/usr/bin/node /opt/joya-agents/whatsapp/bridge.mjs
+
+Restart=always
+RestartSec=10
+MemoryMax=4G
+TasksMax=512
+
+# Same posture as the agent unit: this process runs model-authored commands.
+# It needs write access to the channel directory (session credentials) and to
+# the agent's vault (attachments and memory), and nothing else.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/joya-agents/channels/%i /opt/joya-agents/agents /opt/joya-agents/shared
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RemoveIPC=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=joya-whatsapp-%i
+
+[Install]
+WantedBy=multi-user.target

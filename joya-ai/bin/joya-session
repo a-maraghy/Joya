@@ -1,0 +1,427 @@
+#!/usr/bin/env node
+"use strict";
+/**
+ * joya-session <slug>: runs ONE worker session JOYA AI hired (M-6), under
+ * systemd (deploy/joya-session@.service: joya-session@<slug>.service).
+ *
+ * Why a unit of its own: a hired session must outlive the dashboard and
+ * JOYA AI's own supervisor (both restart on deploys), and must be stopped
+ * gracefully (its transcript kept) when it is retired. A systemd template unit
+ * per session does exactly that, with restarts on failure and nothing shared
+ * with joya-ai.service's cgroup.
+ *
+ * What it starts: the same CLI JOYA AI runs, headless (stream-json), as root
+ * with HOME=/root -- so it is in root's session registry, ListAgents lists it
+ * and SendMessage reaches it -- under its hired display name (-n) and in its
+ * hired cwd, resuming the same session id after a restart.
+ *
+ * Safety (non-negotiable):
+ *   - never --dangerously-skip-permissions or bypassPermissions: the permission
+ *     mode is JOYA AI's (auto), and a configured "bypassPermissions" is refused;
+ *   - the destructive-action gate (hooks/gate.js) is added with --settings, with
+ *     JOYA_GATE_SESSION=hired.<slug>: it applies the built-in rules, the
+ *     classifier and the administrator's deny / ask rules, but NEVER JOYA AI's
+ *     always-allow rules (lib/rules.js);
+ *   - --permission-prompt-tool stdio: every permission question (the gate's
+ *     "ask" included) comes here and is sent to the supervisor as op
+ *     session-approval, which raises an Approve / Deny card in the Command
+ *     Center attributed to this session; the answer comes back on the same
+ *     connection. No answer, no supervisor, a lost connection: deny;
+ *   - root's own settings (the memory hooks) and MCP servers (memory) load as
+ *     for any session of root's; JOYA AI's approvals are never shared.
+ *
+ * Its first prompt is the hire's purpose, marked as coming from JOYA AI (not
+ * the administrator), sent once.
+ *
+ * Token caps (Joya reorganisation, build spec §6): the runner keeps a
+ * standing link to the supervisor (op session-link). On budget-pause it lets
+ * the tool call that is running finish, sends the CLI an interrupt, and
+ * interrupts any turn that starts while paused (a peer's message reaches the
+ * CLI directly, not through here: it stays in the transcript); a message of
+ * its own (the first prompt) waits. budget-resume lifts it. Backstop: the gate
+ * denies every tool call while the supervisor records the session paused.
+ * The permission mode is the one set at hire time (Settings > Sessions &
+ * hiring; the hired record's permission_mode), never bypassPermissions.
+ */
+const fs = require("fs");
+const net = require("net");
+const path = require("path");
+const readline = require("readline");
+const { spawn } = require("child_process");
+const hire = require(path.join(__dirname, "..", "lib", "hire.js"));
+const { chatgptServer } = require(path.join(__dirname, "..", "lib", "chatgpt.js"));
+
+const CONFIG_FILE = process.env.JOYA_AI_CONFIG || "/etc/joya-ai/config.json";
+const DEFAULTS = {
+  cli: "/opt/joya-ai/cli/claude",
+  model: "claude-opus-5-5",
+  permission_mode: "auto",
+  home: "/root",
+  runtime_dir: "/run/user/0",
+  state_dir: "/var/lib/joya-ai",
+  run_dir: "/run/joya-ai",
+  approval_timeout_s: 300,
+  remote_control: true,
+  cli_extra_args: [],
+};
+function loadConfig() {
+  let file = {};
+  try {
+    file = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
+  } catch (e) {
+    if (e.code !== "ENOENT") throw e;
+  }
+  return { ...DEFAULTS, ...file };
+}
+const cfg = loadConfig();
+const log = (...a) => console.log(new Date().toISOString(), ...a);
+
+const slug = process.argv[2];
+if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(String(slug || ""))) {
+  console.error("usage: joya-session <slug>");
+  process.exit(2);
+}
+const FILE = path.join(cfg.state_dir, "sessions", slug + ".json");
+let rec;
+try {
+  rec = JSON.parse(fs.readFileSync(FILE, "utf8"));
+} catch (e) {
+  console.error(`no hired session "${slug}" (${FILE}: ${e.message})`);
+  process.exit(0); // not a failure systemd should retry
+}
+if (rec.status === "retired") {
+  log(`"${rec.name}" is retired; not starting`);
+  process.exit(0);
+}
+const CONTROL_SOCKET = path.join(cfg.run_dir, "joya-ai.sock");
+
+/* ------------------------------------------------------------- the CLI --- */
+const PERMISSION_MODES = ["auto", "default", "acceptEdits", "plan"]; // never bypassPermissions
+const cfgMode = PERMISSION_MODES.includes(cfg.hired_permission_mode || cfg.permission_mode) ? cfg.hired_permission_mode || cfg.permission_mode : "default";
+// Fixed at hire time (the supervisor's hire_perm_mode); an older record without it keeps the config's rule.
+const mode = PERMISSION_MODES.includes(rec.permission_mode) ? rec.permission_mode : cfgMode;
+const GATE = path.join(__dirname, "..", "hooks", "gate.js");
+const settings = {
+  hooks: {
+    PreToolUse: [
+      {
+        matcher: "Bash|Monitor|SendMessage|mcp__memory__memory_forget|CronCreate|RemoteTrigger",
+        hooks: [{ type: "command", command: `${process.execPath} --disable-warning=ExperimentalWarning ${GATE}`, timeout: 10 }],
+      },
+      // The token-cap backstop: every tool call is denied while the supervisor records this session paused at its cap.
+      {
+        matcher: "*",
+        hooks: [{ type: "command", command: `${process.execPath} --disable-warning=ExperimentalWarning ${GATE} --cap-only`, timeout: 10 }],
+      },
+    ],
+  },
+};
+const extra = (Array.isArray(cfg.cli_extra_args) ? cfg.cli_extra_args.map(String) : []).filter((a) => !/dangerously|bypass/i.test(a));
+
+// ask_chatgpt (lib/chatgpt.js): ChatGPT through the Joya broker, only when the administrator asks.
+// Its files go under the state dir, not into the project this session works in.
+function chatgptArgs() {
+  const gpt = chatgptServer(cfg, "hired:" + slug, path.join(cfg.state_dir, "chatgpt", slug));
+  if (!gpt) return [];
+  return ["--mcp-config", JSON.stringify({ mcpServers: { [gpt.name]: gpt.server } }), "--allowedTools", gpt.allow];
+}
+
+function transcriptExists(id) {
+  const dir = path.join(cfg.home, ".claude", "projects");
+  try {
+    for (const d of fs.readdirSync(dir)) if (fs.existsSync(path.join(dir, d, id + ".jsonl"))) return true;
+  } catch (_) {
+    /* none yet */
+  }
+  return false;
+}
+function saveRec(fields) {
+  rec = { ...rec, ...fields };
+  const tmp = FILE + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(rec, null, 2), { mode: 0o600 });
+  fs.renameSync(tmp, FILE);
+}
+
+const resume = transcriptExists(rec.session_id);
+const argv = [
+  "-p",
+  "--input-format", "stream-json",
+  "--output-format", "stream-json",
+  "--verbose",
+  "-n", rec.name,
+  "--model", rec.model || cfg.model,
+  "--permission-mode", mode,
+  "--permission-prompt-tool", "stdio",
+  "--settings", JSON.stringify(settings),
+  ...chatgptArgs(),
+  ...extra,
+  ...(resume ? ["--resume", rec.session_id] : ["--session-id", rec.session_id]),
+];
+const env = {
+  PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+  HOME: cfg.home,
+  USER: "root",
+  LOGNAME: "root",
+  SHELL: "/bin/bash",
+  LANG: process.env.LANG || "C.UTF-8",
+  TERM: "dumb",
+  TZ: process.env.TZ || "Africa/Cairo",
+  DISABLE_AUTOUPDATER: "1",
+  JOYA_AI_CONFIG: CONFIG_FILE,
+  // The gate knows which session asks: never JOYA AI's always-allow rules.
+  JOYA_GATE_SESSION: "hired." + slug,
+};
+if (cfg.runtime_dir && fs.existsSync(cfg.runtime_dir)) env.XDG_RUNTIME_DIR = cfg.runtime_dir;
+for (const k of Object.keys(process.env)) if (/^FAKE_/.test(k)) env[k] = process.env[k]; // the tests' fake CLI
+
+log(`starting "${rec.name}" (${slug}) in ${rec.cwd}, ${resume ? "resuming" : "new session"} ${rec.session_id}, permission mode ${mode}`);
+const child = spawn(cfg.cli, argv, { cwd: rec.cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+child.stdin.on("error", () => {});
+child.stderr.on("data", (d) => process.stderr.write(d));
+const write = (o) => {
+  try {
+    child.stdin.write(JSON.stringify(o) + "\n");
+  } catch (_) {
+    /* gone */
+  }
+};
+
+/** The approval timeout in force: the supervisor's ledger setting (read-only), else the config's. */
+function approvalTimeoutS() {
+  try {
+    const { DatabaseSync } = require("node:sqlite");
+    const db = new DatabaseSync(path.join(cfg.state_dir, "ledger.db"), { readOnly: true, timeout: 2000 });
+    try {
+      const r = db.prepare("SELECT value FROM settings WHERE key = 'approval_timeout_s'").get();
+      const v = r ? JSON.parse(r.value) : null;
+      if (Number.isInteger(v) && v >= 30 && v <= 3600) return v;
+    } finally {
+      db.close();
+    }
+  } catch (_) {
+    /* the config's */
+  }
+  return cfg.approval_timeout_s;
+}
+
+/* ------------------------------------------- permission questions -> cards --- */
+const waiting = new Map(); // request_id -> socket
+function ask(ev) {
+  const req = ev.request || {};
+  const done = (response) => {
+    waiting.delete(ev.request_id);
+    awaiting.delete(ev.request_id);
+    write({ type: "control_response", response: { subtype: "success", request_id: ev.request_id, response } });
+  };
+  const deny = (why) => done({ behavior: "deny", message: why + " Do not retry it; tell JOYA AI it needs the administrator." });
+  const input = req.input || {};
+  let answered = false;
+  const s = net.createConnection(CONTROL_SOCKET);
+  waiting.set(ev.request_id, s);
+  if (req.tool_use_id) awaiting.set(ev.request_id, req.tool_use_id);
+  const timer = setTimeout(() => {
+    if (answered) return;
+    answered = true;
+    s.destroy();
+    deny("Nobody answered the approval request in time, so it was denied.");
+  }, (approvalTimeoutS() + 150) * 1000); // the card's window, plus the supervisor's Windows Hello hold (HOLD_MAX_S 120) and a margin
+  let buf = "";
+  s.setEncoding("utf8");
+  s.on("connect", () =>
+    s.write(
+      JSON.stringify({
+        id: "sa" + Date.now(),
+        op: "session-approval",
+        actor: "session." + slug,
+        slug,
+        request_id: String(ev.request_id).slice(0, 64),
+        tool: String(req.tool_name || "unknown").slice(0, 80),
+        input: JSON.stringify(input).slice(0, 16000),
+        reason: req.decision_reason ? String(req.decision_reason).slice(0, 2000) : undefined,
+        tool_use_id: req.tool_use_id ? String(req.tool_use_id).slice(0, 64) : undefined,
+      }) + "\n"
+    )
+  );
+  s.on("data", (c) => {
+    buf += c;
+    const nl = buf.indexOf("\n");
+    if (nl === -1 || answered) return;
+    answered = true;
+    clearTimeout(timer);
+    s.destroy();
+    let msg = null;
+    try {
+      msg = JSON.parse(buf.slice(0, nl));
+    } catch (_) {
+      /* below */
+    }
+    const r = msg && msg.ok && msg.data;
+    if (r && r.behavior === "allow") return done({ behavior: "allow", updatedInput: input });
+    deny(r && r.message ? r.message : "Denied" + (msg && msg.error ? ": " + msg.error : "") + ".");
+  });
+  const lost = (why) => {
+    if (answered) return;
+    answered = true;
+    clearTimeout(timer);
+    deny(`The Command Center could not be asked (${why}), so it was denied.`);
+  };
+  s.on("error", (e) => lost(e.message));
+  s.on("close", () => lost("the connection closed"));
+}
+function cancel(ev) {
+  const s = waiting.get(ev.request_id);
+  waiting.delete(ev.request_id);
+  awaiting.delete(ev.request_id);
+  if (s) s.destroy();
+  const c = net.createConnection(CONTROL_SOCKET);
+  c.on("error", () => {});
+  c.on("connect", () => c.end(JSON.stringify({ id: "sc" + Date.now(), op: "session-approval-cancel", actor: "session." + slug, slug, request_id: String(ev.request_id).slice(0, 64) }) + "\n"));
+}
+
+/* ------------------------------------------ token cap: pause / resume --- */
+const awaiting = new Map(); // request_id -> tool_use_id: a tool call waiting for its approval card (not running)
+const executing = new Set(); // tool_use ids started and not yet answered
+let busy = false; // a turn is running
+let paused = false;
+let interrupted = false; // this turn was already interrupted
+let firstHeld = false; // the first prompt waits for budget-resume
+function sendFirst() {
+  saveRec({ first_sent: new Date().toISOString() });
+  busy = true;
+  write({ type: "user", message: { role: "user", content: hire.firstPrompt(rec) }, parent_tool_use_id: null, session_id: "" });
+  log(`first prompt sent (from JOYA AI): ${String(rec.purpose).slice(0, 80)}`);
+}
+/** While paused: interrupt the running turn once no tool call is actually running (a call waiting for its card does not count). */
+function maybeInterrupt() {
+  if (!paused || !busy || interrupted || !initialised) return;
+  const waitingIds = new Set(awaiting.values());
+  if ([...executing].some((id) => !waitingIds.has(id))) return; // let the current tool call finish
+  interrupted = true;
+  write({ type: "control_request", request_id: "cap-" + Date.now(), request: { subtype: "interrupt" } });
+  log("paused at the daily token cap: interrupted the running turn");
+}
+function setPaused(on, why) {
+  if (on === paused) {
+    if (on) maybeInterrupt();
+    return;
+  }
+  paused = on;
+  if (on) {
+    log(`budget-pause (${why || "daily token cap reached"}): the running tool call finishes, then the turn is interrupted; nothing new starts until budget-resume`);
+    maybeInterrupt();
+  } else {
+    log(`budget-resume (${why || "resumed"})`);
+    interrupted = false;
+    if (firstHeld) {
+      firstHeld = false;
+      sendFirst();
+    }
+  }
+}
+let linkBackoff = 2000;
+function link() {
+  if (stopping) return;
+  const s = net.createConnection(CONTROL_SOCKET);
+  let buf = "";
+  let first = true;
+  s.setEncoding("utf8");
+  s.on("connect", () => s.write(JSON.stringify({ id: "sl" + Date.now(), op: "session-link", actor: "session." + slug, slug }) + "\n"));
+  s.on("data", (c) => {
+    buf += c;
+    let nl;
+    while ((nl = buf.indexOf("\n")) !== -1) {
+      const line = buf.slice(0, nl);
+      buf = buf.slice(nl + 1);
+      let m;
+      try {
+        m = JSON.parse(line);
+      } catch (_) {
+        continue;
+      }
+      if (first) {
+        first = false;
+        if (m.ok) {
+          linkBackoff = 2000;
+          setPaused(!!(m.data && m.data.paused), "linked while paused at the daily token cap");
+        } else log("the supervisor refused the link: " + m.error);
+        continue;
+      }
+      const op = m.control && m.control.op;
+      if (op === "budget-pause") setPaused(true, m.control.reason);
+      else if (op === "budget-resume") setPaused(false, m.control.reason);
+    }
+  });
+  s.on("error", () => {});
+  s.on("close", () => {
+    if (stopping) return;
+    const t = setTimeout(link, linkBackoff);
+    t.unref();
+    linkBackoff = Math.min(linkBackoff * 2, 30000);
+  });
+}
+
+/* --------------------------------------------------------- the stream --- */
+let initialised = false;
+const rl = readline.createInterface({ input: child.stdout, crlfDelay: Infinity });
+rl.on("line", (line) => {
+  let ev;
+  try {
+    ev = JSON.parse(line);
+  } catch (_) {
+    return;
+  }
+  if (ev.type === "control_request") {
+    const sub = ev.request && ev.request.subtype;
+    if (sub === "can_use_tool") return ask(ev);
+    return write({ type: "control_response", response: { subtype: "error", request_id: ev.request_id, error: "not supported by joya-session" } });
+  }
+  if (ev.type === "control_cancel_request") return cancel(ev);
+  if (ev.type === "control_response" && !initialised && ev.response && ev.response.request_id === "init") {
+    initialised = true;
+    if (cfg.remote_control) write({ type: "control_request", request_id: "rc", request: { subtype: "remote_control", enabled: true } });
+    if (!rec.first_sent) {
+      if (paused) {
+        firstHeld = true;
+        log("paused at the daily token cap: the first prompt waits for budget-resume");
+      } else sendFirst();
+    }
+  }
+  if (ev.type === "command_lifecycle" && ev.state === "started") busy = true;
+  if (ev.type === "assistant" || ev.type === "stream_event") busy = true;
+  if (ev.type === "assistant" && ev.message && Array.isArray(ev.message.content)) {
+    for (const b of ev.message.content) if (b && b.type === "tool_use" && b.id) executing.add(b.id);
+  }
+  if (ev.type === "user" && ev.message && Array.isArray(ev.message.content)) {
+    for (const b of ev.message.content) if (b && b.type === "tool_result") executing.delete(b.tool_use_id);
+  }
+  if (ev.type === "result") {
+    log(`turn ended${ev.is_error ? " (error)" : ""}`);
+    busy = false;
+    interrupted = false;
+    executing.clear();
+  } else maybeInterrupt();
+});
+write({ type: "control_request", request_id: "init", request: { subtype: "initialize" } });
+
+/* ------------------------------------------------------ stop gracefully --- */
+let stopping = false;
+function stop(sig) {
+  if (stopping) return;
+  stopping = true;
+  log(`${sig}: closing "${rec.name}" (its transcript is kept)`);
+  try {
+    child.stdin.end();
+  } catch (_) {
+    /* gone */
+  }
+  setTimeout(() => child.kill("SIGTERM"), 25000).unref();
+}
+process.on("SIGTERM", () => stop("SIGTERM"));
+process.on("SIGINT", () => stop("SIGINT"));
+child.on("exit", (code, signal) => {
+  log(`"${rec.name}" exited code=${code} signal=${signal}`);
+  process.exit(stopping ? 0 : code == null ? 1 : code);
+});
+
+// The standing link to the supervisor (token caps): after `stopping` exists.
+link();

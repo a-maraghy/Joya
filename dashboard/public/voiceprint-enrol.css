@@ -1,0 +1,23 @@
+/* The guided voiceprint enrolment (lib/views-voiceprint-enrol.js). Tokens from style.css. */
+.vp-facts { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px; }
+.vp-facts li { display: flex; gap: 8px; align-items: flex-start; color: var(--body); font-size: 14px; }
+.vp-facts svg { flex: none; margin-top: 3px; color: var(--accent); }
+.vp-mic { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.vp-field { display: grid; gap: 4px; min-width: 0; flex: 1 1 220px; }
+.vp-field select { width: 100%; max-width: 100%; }
+.vp-meter { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin: 10px 0 4px; }
+.vp-meter span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 80ms linear; }
+.vp-list { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 6px; }
+.vp-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; grid-template-areas: "n text ctl" "n kind ctl"; gap: 2px 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.vp-row.on { border-color: var(--accent); }
+.vp-n { grid-area: n; font-weight: 600; color: var(--accent); text-align: right; font-size: 13px; }
+.vp-text { grid-area: text; color: var(--ink); font-size: 15px; overflow-wrap: anywhere; }
+.vp-row[data-part="enrol"] .vp-text { font-size: 16px; line-height: 1.55; }
+.vp-kind { grid-area: kind; color: var(--muted); font-size: 13px; }
+.vp-ctl { grid-area: ctl; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; max-width: 300px; }
+.vp-state.ok { color: var(--ok, var(--accent)); }
+.vp-state.bad { color: var(--bad); }
+@media (max-width: 640px) {
+  .vp-row { grid-template-columns: 26px minmax(0, 1fr); grid-template-areas: "n text" "n kind" "n ctl"; }
+  .vp-ctl { justify-content: flex-start; max-width: none; }
+}

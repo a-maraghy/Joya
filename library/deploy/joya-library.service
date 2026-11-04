@@ -1,0 +1,46 @@
+# JOYA Library service: view counts and the studio (sign-in, uploads, encoding jobs) for
+# https://library.example.com. Installed by library/deploy/install.sh.
+[Unit]
+Description=JOYA Library (view counts and studio)
+After=network.target
+
+[Service]
+Type=simple
+User=joyalib
+Group=joyalib
+WorkingDirectory=/opt/joya-library/library
+ExecStart=/usr/bin/python3 /opt/joya-library/library/server.py
+Environment=JOYA_LIBRARY_PORT=8795
+Environment=JOYA_LIBRARY_ROOT=/var/www/library
+Environment=JOYA_LIBRARY_MANIFEST=/var/lib/joya-library/library.json
+Environment=JOYA_LIBRARY_URL=https://library.example.com
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=3
+# Encoding runs here (ffmpeg): keep it from crowding Odoo and the dashboard.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+MemoryMax=4G
+UMask=0022
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/www/library /var/lib/joya-library
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

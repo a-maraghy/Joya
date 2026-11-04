@@ -1,0 +1,19 @@
+/* JOYA AI ▸ Settings ▸ Briefs & watchers (lib/routes-proactive.js): the day chips, the add box, a watcher's row. */
+.pa-days { display: flex; flex-wrap: wrap; gap: 4px; }
+.pa-day { position: relative; cursor: pointer; }
+.pa-day input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.pa-day span { display: inline-grid; place-items: center; min-width: 40px; height: 30px; padding: 0 8px; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--line-strong, var(--line));
+  font: 500 13px var(--ui); color: var(--muted); background: transparent; transition: background .15s, color .15s, border-color .15s; }
+.pa-day input:checked + span { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: color-mix(in srgb, var(--accent) 55%, transparent); color: var(--ink); font-weight: 600; }
+.pa-day input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pa-addf { display: flex; gap: 8px; margin-top: 10px; }
+.pa-addf input[type="text"] { flex: 1; min-width: 0; }
+.pa-w .pa-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.pa-w .pa-acts form { margin: 0; }
+.pa-w .pa-last { display: inline-block; margin-top: 3px; color: var(--dim); font-size: 13px; }
+.pa-w .pill { white-space: nowrap; }
+@media (max-width: 720px) {
+  .pa-w { grid-template-columns: minmax(0, 1fr); }
+  .pa-w .pa-acts { justify-content: flex-start; }
+  .pa-addf { flex-direction: column; }
+}

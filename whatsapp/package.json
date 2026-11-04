@@ -1,0 +1,14 @@
+{
+  "name": "joya-whatsapp-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WhatsApp transport for a JOYA agent, sharing its vault and memory",
+  "main": "bridge.mjs",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.266",
+    "baileys": "7.0.0-rc14",
+    "qrcode": "^1.5.4"
+  }
+}

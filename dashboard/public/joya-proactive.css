@@ -1,0 +1,93 @@
+/*
+ * Proactive JOYA AI (public/joya-proactive.js): the brief / catch-up card, watcher toasts and the
+ * "set a watcher?" offer in the Command Center; the brief's glance card in the desktop app.
+ * The Command Center's own tokens (joya-ai.css), so dark and light follow the theme.
+ */
+
+/* ---- the card, top left beside the rail (the decision card is on the right) ---- */
+.pa-card { position: fixed; left: 76px; top: calc(var(--topbar-h, 56px) + 16px); z-index: 7; width: min(390px, calc(100vw - 120px)); max-height: calc(100vh - var(--topbar-h, 56px) - 220px);
+  overflow: auto; box-sizing: border-box; padding: 12px 14px 10px; border-radius: 16px; background: var(--cc-glass-2, var(--panel)); border: 1px solid var(--cc-glass-line, var(--line));
+  color: var(--ink); box-shadow: var(--cc-shadow, var(--shadow)); backdrop-filter: blur(20px); animation: pa-in .28s ease-out; font: 13px/1.4 var(--ui); }
+@keyframes pa-in { from { opacity: 0; transform: translateY(-6px); } }
+.pa-card header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.pa-ic { flex: none; width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; font-size: 16px; background: var(--cc-joya-tint, rgba(0, 200, 150, .1)); color: var(--accent); }
+.pa-card.catchup .pa-ic { background: color-mix(in srgb, var(--violet-ink, #7420C4) 12%, transparent); color: var(--violet-ink, #7420C4); }
+.pa-h { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pa-h b { font: 600 14px/1.25 var(--brand-font, var(--ui)); }
+.pa-h small { color: var(--dim); font-size: 13px; }
+.pa-x { flex: none; width: 26px; height: 26px; border: 0; border-radius: 8px; background: transparent; color: var(--dim); font-size: 18px; line-height: 1; cursor: pointer; padding: 0; }
+.pa-x:hover { background: var(--cc-glass, rgba(128, 128, 128, .15)); color: var(--ink); }
+.pa-x:focus-visible, .pa-b:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pa-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pa-lines li { display: grid; grid-template-columns: 8px auto minmax(0, 1fr); column-gap: 7px; align-items: baseline; }
+.pa-lines i { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); align-self: center; }
+.pa-lines .t-ok i { background: var(--accent); }
+.pa-lines .t-warn i { background: var(--warn); }
+.pa-lines .t-err i { background: var(--bad); }
+.pa-lines b { font-weight: 600; white-space: nowrap; }
+.pa-lines .pa-st { all: unset; cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.pa-lines .pa-st:hover { text-decoration-style: solid; }
+.pa-lines .pa-st:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.pa-lines .t-warn b { color: var(--warn); }
+.pa-lines .t-err b { color: var(--bad); }
+.pa-lines span { color: var(--muted); overflow-wrap: anywhere; }
+.pa-card footer { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--cc-glass-line, var(--line)); }
+.pa-card footer small { color: var(--dim); font-size: 13px; }
+.pa-card footer .sp { flex: 1; }
+.pa-b { display: inline-flex; align-items: center; height: 28px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--line-strong, var(--line)); background: transparent; color: var(--ink);
+  font: 500 13px var(--ui); cursor: pointer; text-decoration: none; white-space: nowrap; }
+.pa-b:hover { background: var(--cc-glass, rgba(128, 128, 128, .12)); }
+.pa-b.pri { background: var(--brand, var(--accent)); border-color: transparent; color: var(--on-brand, #fff); }
+.pa-b[disabled] { opacity: .5; cursor: default; }
+
+/* ---- watcher toasts, top right under the bar ---- */
+.pa-toasts { position: fixed; right: 18px; top: calc(var(--topbar-h, 56px) + 14px); z-index: 75; display: flex; flex-direction: column; gap: 8px; width: min(360px, calc(100vw - 36px)); pointer-events: none; }
+.pa-toast { pointer-events: auto; display: flex; align-items: flex-start; gap: 10px; padding: 10px 10px 10px 12px; border-radius: 12px; background: var(--cc-glass-2, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); box-shadow: var(--cc-shadow, var(--shadow)); backdrop-filter: blur(18px); color: var(--ink); font: 13px/1.4 var(--ui);
+  animation: pa-in .25s ease-out; transition: opacity .35s, transform .35s; }
+.pa-toast.out { opacity: 0; transform: translateX(12px); }
+.pa-toast > i { flex: none; width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 18%, transparent); }
+.pa-toast > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pa-toast b { font: 600 13px var(--mono); letter-spacing: 0; color: var(--warn); }
+.pa-toast small { color: var(--dim); font-size: 13px; }
+.pa-toast button { flex: none; width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: var(--dim); cursor: pointer; font-size: 16px; line-height: 1; padding: 0; }
+.pa-toast button.pa-b { width: auto; height: 24px; align-self: flex-start; margin-top: 6px; padding: 0 9px; font-size: 13px; color: var(--ink); border: 1px solid var(--line-strong, var(--line)); }
+
+/* ---- "Set a watcher?" above the composer ---- */
+.pa-offer { position: relative; z-index: 2; width: min(760px, 100%); box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); box-shadow: var(--cc-shadow, var(--shadow)); backdrop-filter: blur(18px); color: var(--ink); font: 13px/1.4 var(--ui); animation: pa-in .2s ease-out; }
+.pa-o-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pa-o-t b { font: 600 13px var(--mono); letter-spacing: 0; color: var(--accent); }
+.pa-o-t span { font-weight: 600; font-size: 13.5px; }
+.pa-o-t small { color: var(--dim); font-size: 13px; }
+.pa-o-a { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* the event log's badges */
+.b-watch { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 8%, transparent); }
+.b-brief { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+
+@media (max-width: 720px) {
+  .pa-card { left: 12px; right: 12px; width: auto; top: calc(var(--topbar-h, 56px) + 10px); max-height: 46vh; }
+  .pa-offer { flex-direction: column; align-items: stretch; }
+  .pa-card footer small { display: none; }
+}
+
+/* ---- the desktop app: the brief as the first glance card ---- */
+html.cc-desk .pa-card, html.cc-desk .pa-toasts { display: none; }
+html.cc-desk .pa-offer { width: 100%; background: rgba(128, 128, 128, .10); border-color: var(--dk-card-b); color: var(--dk-tx); box-shadow: none; padding: 8px 10px; flex-direction: column; align-items: stretch; gap: 8px; }
+html.cc-desk .pa-offer .pa-o-t b { color: var(--dk-accent); }
+html.cc-desk .pa-offer .pa-o-t small { color: var(--dk-tx2); }
+html.cc-desk .pa-offer .pa-b { border-color: var(--dk-card-b); color: var(--dk-tx); }
+html.cc-desk .pa-offer .pa-b.pri { background: var(--dk-accent); color: #04241B; }
+html.cc-desk .dk-gl-pa { box-shadow: 0 0 0 1px color-mix(in srgb, var(--dk-accent) 45%, transparent), var(--dk-shadow); }
+html.cc-desk .dk-gl-pa .dk-gl-k > span:first-of-type { color: var(--dk-accent); }
+html.cc-desk .dk-gl-pa.catchup { box-shadow: 0 0 0 1px rgba(167, 107, 255, .5), var(--dk-shadow); }
+html.cc-desk .dk-gl-pa.catchup .dk-gl-k > span:first-of-type { color: #B98CFF; }
+html.cc-desk[data-theme="light"] .dk-gl-pa.catchup .dk-gl-k > span:first-of-type { color: #7420C4; }
+html.cc-desk .dk-gl-k time { font: 600 13px var(--mono); letter-spacing: 0; color: var(--dk-tx2); }
+html.cc-desk .dk-gl-pa-lines { list-style: none; margin: 5px 0 8px; padding: 0; display: flex; flex-direction: column; gap: 4px; font: 13px/1.35 var(--ui); color: var(--dk-tx2); }
+html.cc-desk .dk-gl-pa-lines li { overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+html.cc-desk .dk-gl-pa-lines b { color: var(--dk-tx); font-weight: 600; }
+html.cc-desk .dk-gl-pa-lines .t-warn b { color: var(--dk-amber); }
+html.cc-desk .dk-gl-pa-lines .t-err b { color: var(--dk-red); }
+html.cc-desk .dk-gl-pa-lines .t-ok b { color: var(--dk-accent); }

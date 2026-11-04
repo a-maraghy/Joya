@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-needs-you"
+description = "Enables the needs_you command without any pre-configured scope."
+commands.allow = ["needs_you"]
+
+[[permission]]
+identifier = "deny-needs-you"
+description = "Denies the needs_you command without any pre-configured scope."
+commands.deny = ["needs_you"]

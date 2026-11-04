@@ -1,0 +1,20 @@
+# The app's pure modules (no Tauri, no Windows), compiled on their own so their tests run on any
+# machine -- the build box is Linux. The files are the app's own (src-tauri/src/*.rs), not copies.
+[package]
+name = "joya-desktop-core-tests"
+version = "0.1.14" # keep equal to src-tauri (site::VERSION reads it)
+edition = "2021"
+publish = false
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.8"
+url = "2"
+zip = { version = "=4.6.1", default-features = false, features = ["deflate-flate2-zlib-rs"] } # hands/docs.rs, hands/ooxml.rs
+lopdf = { version = "=0.44.0", default-features = false } # hands/pdf.rs

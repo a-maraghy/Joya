@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-full-cc"
+description = "Enables the open_full_cc command without any pre-configured scope."
+commands.allow = ["open_full_cc"]
+
+[[permission]]
+identifier = "deny-open-full-cc"
+description = "Denies the open_full_cc command without any pre-configured scope."
+commands.deny = ["open_full_cc"]

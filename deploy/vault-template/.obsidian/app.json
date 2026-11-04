@@ -1,0 +1,15 @@
+{
+  "alwaysUpdateLinks": true,
+  "newLinkFormat": "shortest",
+  "attachmentFolderPath": "attachments",
+  "useMarkdownLinks": false,
+  "showLineNumber": true,
+  "strictLineBreaks": false,
+  "newFileLocation": "folder",
+  "newFileFolderPath": "memory/facts",
+  "userIgnoreFilters": [
+    "archive/",
+    "outbox/archive/",
+    "drawings/archive/"
+  ]
+}

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-blur-rects"
+description = "Enables the set_blur_rects command without any pre-configured scope."
+commands.allow = ["set_blur_rects"]
+
+[[permission]]
+identifier = "deny-set-blur-rects"
+description = "Denies the set_blur_rects command without any pre-configured scope."
+commands.deny = ["set_blur_rects"]

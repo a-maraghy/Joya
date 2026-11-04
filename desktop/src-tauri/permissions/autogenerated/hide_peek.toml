@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-hide-peek"
+description = "Enables the hide_peek command without any pre-configured scope."
+commands.allow = ["hide_peek"]
+
+[[permission]]
+identifier = "deny-hide-peek"
+description = "Denies the hide_peek command without any pre-configured scope."
+commands.deny = ["hide_peek"]

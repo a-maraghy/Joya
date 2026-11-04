@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JOYA AI — Settings</title>
+<link rel="stylesheet" href="app.css">
+<script src="settings.js" defer></script>
+</head>
+<body class="settings">
+<main>
+  <h1><img src="icon.png" alt="" width="28" height="28"> JOYA AI <small id="ver" class="note"></small></h1>
+  <p class="note">The app's own settings, on this computer. JOYA AI's settings (voice, approvals, sessions) are on the site, in JOYA AI ▸ Settings.</p>
+
+  <h2>Where it lives</h2>
+  <div class="row"><span>Mode<small>Floating sits in a corner above every window; Peek stays hidden until you call it; Desktop layer lives on the wallpaper, under every window; Companion is just the core, at the top centre of your screen, over every app.</small></span>
+    <span class="seg" data-k="mode"><button data-v="floating">Floating</button><button data-v="peek">Peek</button><button data-v="desktop">Desktop layer</button><button data-v="companion">Companion</button></span></div>
+  <div class="row"><span>Focus mode<small>Just the core; its colour and motion still say what it is doing.</small></span><input type="checkbox" id="focus"></div>
+  <div class="row"><span>Glance cards<small>Beside JOYA AI: approvals waiting, sessions, today's tokens and live alerts. On the desktop you can drag them anywhere and pin them there (remembered per monitor). Focus mode hides them.</small></span><input type="checkbox" id="glance"></div>
+  <div class="row"><span>Monitor<small>Peek always opens where the mouse is.</small></span><select id="monitor"></select></div>
+  <div class="row"><span>Size, position, opacity<small>Remembered per monitor. Size: the box's tools; position: drag the core (Floating) or pick below.</small></span>
+    <span><span class="seg" data-k="size"><button data-v="S">S</button><button data-v="M">M</button><button data-v="L">L</button></span></span></div>
+  <div class="row"><span>Desktop layer position</span><span class="seg" data-k="across"><button data-v="left">Left</button><button data-v="centre">Centre</button><button data-v="right">Right</button></span></div>
+  <div class="row"><span>Floating corner</span><span class="seg" data-k="corner"><button data-v="tl">↖</button><button data-v="tr">↗</button><button data-v="bl">↙</button><button data-v="br">↘</button></span></div>
+  <div class="row"><span>Opacity <b id="opv"></b></span><input type="range" id="opacity" min="35" max="100"></div>
+
+  <h2>Companion</h2>
+  <p class="note">Just the core, at the top centre of the screen you are working on, on top of every app. Click it for the Command Center. It steps out of the way of full-screen video and games and comes back after. The tray switches it on and off.</p>
+  <div class="row"><span>Stay on this monitor<small>Off: it moves to the monitor you are working on.</small></span><input type="checkbox" id="comp-stay"></div>
+
+  <h2 id="eye-contact">Eye contact</h2>
+  <p class="note">Use this computer's camera so JOYA AI knows when you are there. <b>Off unless you switch it on.</b> The bot looks at you and follows you as you move, looks up when you sit down and dozes when you walk away; the glance cards come forward while you look at the screen; toasts and sounds wait while you are away and come as one summary when you are back.</p>
+  <p class="note">Everything happens on this computer: a small face model in JOYA AI's page reads a small picture a few times a second and throws it away. No picture, video or face data is stored or sent anywhere — not to Joya, not to anyone; only "here / looking / away" is used. The camera light is on while it works. It lets go of the camera when you switch this off (here, or the tray's "Camera presence"), when JOYA AI is hidden, the screen locks, or another app is in a meeting. Only this window and the tray can switch it on.</p>
+  <div class="row"><span>Camera presence</span><input type="checkbox" id="cam-on"></div>
+  <div class="row"><span>Look and speak<small>Face JOYA AI and start talking: it listens without the talk key. While you face it, a microphone level meter runs (nothing is recorded or sent until you speak). A reply pauses when you look away and goes on when you look back.</small></span><input type="checkbox" id="cam-speak"></div>
+  <div class="row"><span>Let go of the camera in energy saver<small>On battery it looks less often (2 times a second instead of 5).</small></span><input type="checkbox" id="cam-saver"></div>
+
+  <h2>Hotkeys</h2>
+  <p class="note">Click a box, then press the keys. Ctrl or Alt plus one key. Esc (hide Peek, end a call) works while JOYA AI has the focus.</p>
+  <div class="row"><span>Talk (hold)<small id="talk-note"></small></span><input type="text" class="key" id="hk-talk" readonly></div>
+  <div class="row"><span>Live conversation (start / end)<small id="live-note"></small></span><input type="text" class="key" id="hk-live" readonly></div>
+  <div class="row"><span>Show / hide</span><input type="text" class="key" id="hk-show" readonly></div>
+  <div class="row"><span>Focus mode</span><input type="text" class="key" id="hk-focus" readonly></div>
+  <p class="note">Ctrl+Space is "trigger suggestion" in VS Code and switches the input method on Chinese and Japanese keyboards; JOYA AI takes it from every app while it runs. Ctrl+Alt+Space is the alternative.</p>
+
+  <h2>Behaviour</h2>
+  <div class="row"><span>Do not disturb<small>No Windows toasts; the amber tray dot stays.</small></span><input type="checkbox" id="dnd"></div>
+  <div class="row"><span>Battery saver<small>On battery, with Windows' energy saver, or while a full-screen app runs, the core holds still.</small></span><input type="checkbox" id="batt"></div>
+  <div class="row"><span>Real blur behind cards<small id="blur-note">The chat panel, the state pill and the cards frost what is behind them (Windows 10 version 1809 or later, Windows 11). Off: tinted, as before. Approval cards stay near-solid either way.</small></span><input type="checkbox" id="blur"></div>
+  <div class="row"><span>Start with Windows</span><input type="checkbox" id="autostart"></div>
+  <div class="row"><span>Check for updates<small>From joya.example.com/desktop/, signed.</small></span><input type="checkbox" id="updates"></div>
+
+  <h2>This computer</h2>
+  <p class="note">Link this computer to Joya so JOYA AI can work on it when you ask it to. It never starts by itself: you hand over control from JOYA AI, for a limited time, with a glowing frame round the screen the whole time. Stop it with the pill's Stop button or the stop key below.</p>
+  <div class="row"><span>Status<small id="m-status">…</small></span><button class="btn" id="m-unlink" type="button" hidden>Unlink</button></div>
+  <div id="m-pair">
+    <div class="row"><span>Pairing code<small>Joya ▸ Machines ▸ Link a computer shows one (8 characters, 10 minutes).</small></span><input type="text" id="m-code" placeholder="ABCD-EFGH" maxlength="12" autocomplete="off" spellcheck="false"></div>
+    <div class="row"><span>Name in Joya</span><input type="text" id="m-name" maxlength="60" autocomplete="off"></div>
+    <div class="actions"><span class="sp"></span><button class="btn pri" id="m-link" type="button">Link</button></div>
+  </div>
+  <div class="row"><span>Stop JOYA AI's control<small id="stop-note">Ends control at once, here on this computer.</small></span><input type="text" class="key" id="hk-stop" readonly><button class="btn" id="hk-stop-def" type="button" title="Back to Ctrl+Alt+Esc">Default</button></div>
+
+  <h2>Claude Code</h2>
+  <div class="row"><span>Found<small id="m-claude">…</small></span><button class="btn" id="m-recheck" type="button">Look again</button></div>
+  <div class="row"><span>Path<small>Leave empty to look on PATH, in %USERPROFILE%\.local\bin and in npm's folder.</small></span><input type="text" id="m-cpath" placeholder="C:\…\claude.exe" spellcheck="false"></div>
+  <div class="row"><span>Claude in Chrome<small id="m-chrome">…</small></span></div>
+  <div class="row"><span>Microsoft Office<small id="m-office">…</small></span></div>
+  <div class="err" id="m-err" role="alert"></div>
+
+  <div class="err" id="err" role="alert"></div>
+  <div class="actions"><button class="btn" id="upd" type="button">Check for updates now</button><span class="sp"></span><button class="btn" id="cancel" type="button">Close</button><button class="btn pri" id="save" type="button">Save</button></div>
+</main>
+</body>
+</html>

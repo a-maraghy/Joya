@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-webauthn-ceremony"
+description = "Enables the webauthn_ceremony command without any pre-configured scope."
+commands.allow = ["webauthn_ceremony"]
+
+[[permission]]
+identifier = "deny-webauthn-ceremony"
+description = "Denies the webauthn_ceremony command without any pre-configured scope."
+commands.deny = ["webauthn_ceremony"]

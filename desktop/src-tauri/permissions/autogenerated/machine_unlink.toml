@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-machine-unlink"
+description = "Enables the machine_unlink command without any pre-configured scope."
+commands.allow = ["machine_unlink"]
+
+[[permission]]
+identifier = "deny-machine-unlink"
+description = "Denies the machine_unlink command without any pre-configured scope."
+commands.deny = ["machine_unlink"]

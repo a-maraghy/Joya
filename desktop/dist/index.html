@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JOYA AI</title>
+<link rel="stylesheet" href="app.css">
+<script src="index.js" defer></script>
+</head>
+<body class="boot">
+  <!-- The app's own first card: "Connecting", or "Offline — retrying" (DESIGN.md "Signed out and offline").
+       Nothing typed is queued while offline. It goes to the site as soon as the site answers. -->
+  <div class="gate" id="gate" role="status">
+    <img src="icon.png" alt="" width="40" height="40">
+    <b id="g-title">Connecting to JOYA AI…</b>
+    <div class="sub" id="g-sub">joya.example.com</div>
+    <button type="button" class="btn" id="g-retry" hidden>Retry now</button>
+    <button type="button" class="btn" id="g-browser" hidden>Open in your browser</button>
+  </div>
+</body>
+</html>

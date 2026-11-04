@@ -1,0 +1,62 @@
+/* Joya > Computers (lib/views-machines.js). Uses the panel's tokens (style.css). */
+.mc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.mc-row { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 12px; border: 1px solid var(--line, rgba(127, 127, 127, 0.25)); border-radius: 12px; }
+.mc-main { flex: 1 1 auto; min-width: 0; }
+.mc-side { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+.mc-title { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mc-lease { margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(124, 92, 255, 0.45); background: rgba(124, 92, 255, 0.08); }
+.mc-lease-head { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.mc-take { margin-top: 10px; }
+.mc-take summary, .mc-more summary { cursor: pointer; }
+.mc-take textarea { width: 100%; }
+.mc-more form { margin-top: 8px; }
+.mc-code { margin-top: 8px; }
+.mc-code-value { font-size: 2rem; letter-spacing: 0; margin: 6px 0 10px; }
+.mc-acts { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.mc-act { display: grid; grid-template-columns: 240px 1fr; gap: 12px; align-items: start; }
+.mc-shot img { width: 240px; height: auto; border-radius: 8px; border: 1px solid var(--line, rgba(127, 127, 127, 0.25)); display: block; }
+.mc-shot.none { width: 240px; height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px dashed var(--line, rgba(127, 127, 127, 0.35)); font-size: 0.8rem; opacity: 0.7; }
+.warn-text { color: var(--warn, #b7791f); }
+
+/* 0.1.11: Chrome (Claude in Chrome), the folders, the live action log. */
+.mc-chrome { margin-top: 8px; }
+.mc-chrome-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mc-steps { margin-top: 6px; padding: 8px 12px; border-radius: 10px; border: 1px dashed var(--line-strong, rgba(127, 127, 127, 0.35)); }
+.mc-steps summary, .mc-folders summary { cursor: pointer; }
+.mc-steps .steps { margin: 6px 0; padding-left: 20px; }
+form.inline { display: inline; margin: 0; }
+.btn.small { padding: 2px 8px; font-size: 0.8rem; min-height: 0; }
+.mc-folders { margin-top: 10px; }
+.mc-folder-list { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; }
+.mc-folder-list li { display: flex; gap: 6px; align-items: center; }
+.mc-folder-add { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.mc-folder-add input { flex: 1 1 220px; min-width: 0; }
+.mc-live { margin: 10px 0; padding: 8px 10px; border-radius: 10px; background: var(--panel, #fff); border: 1px solid var(--line, rgba(127, 127, 127, 0.25)); }
+.mc-live-head { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+.mc-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-2, #00a57a); animation: mc-pulse 1.6s infinite; flex: none; }
+@keyframes mc-pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 165, 122, 0.55); } 70% { box-shadow: 0 0 0 7px rgba(0, 165, 122, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 165, 122, 0); } }
+.mc-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.mc-log-row { display: grid; grid-template-columns: 64px 92px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 5px 6px; border-radius: 8px; }
+.mc-log-row:nth-child(odd) { background: var(--panel-2, rgba(127, 127, 127, 0.05)); }
+.mc-log-row.failed .mc-log-target { color: var(--warn, #9a5b00); }
+.mc-log-row.new { animation: mc-in 0.6s ease-out; }
+@keyframes mc-in { from { background: var(--accent-soft, rgba(0, 165, 122, 0.18)); } }
+.mc-log-time { white-space: nowrap; }
+.mc-log-kind { display: inline-flex; gap: 4px; align-items: center; color: var(--muted, #46535e); }
+.mc-log-what { min-width: 0; overflow-wrap: anywhere; }
+.mc-log-target { font-family: var(--mono, ui-monospace, monospace); font-size: 0.82rem; }
+.mc-log-detail { display: block; }
+.mc-log-pills { white-space: nowrap; }
+.mc-log-empty { padding: 6px; }
+@media (prefers-reduced-motion: reduce) {
+  .mc-live-dot, .mc-log-row.new { animation: none; }
+}
+@media (max-width: 640px) {
+  .mc-row { flex-direction: column; }
+  .mc-side { align-items: flex-start; flex-direction: row; flex-wrap: wrap; }
+  .mc-act { grid-template-columns: 1fr; }
+  .mc-shot img, .mc-shot.none { width: 100%; }
+  .mc-log-row { grid-template-columns: 64px minmax(0, 1fr); }
+  .mc-log-kind { display: none; }
+  .mc-log-pills { grid-column: 2; white-space: normal; }
+}

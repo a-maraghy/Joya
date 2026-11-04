@@ -1,0 +1,4 @@
+# joya-voiceprint's own venv (/opt/joya-voiceprint/venv), installed by deploy/install-voiceprint.sh.
+# No torch: the features are numpy (fbank.py), the model runs in ONNX Runtime.
+numpy==2.5.3
+onnxruntime==1.30.0

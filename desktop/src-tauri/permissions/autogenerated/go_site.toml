@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-go-site"
+description = "Enables the go_site command without any pre-configured scope."
+commands.allow = ["go_site"]
+
+[[permission]]
+identifier = "deny-go-site"
+description = "Denies the go_site command without any pre-configured scope."
+commands.deny = ["go_site"]

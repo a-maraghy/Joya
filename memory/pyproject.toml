@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "joya-memory"
+version = "0.1.0"
+description = "Local vector + keyword memory over an Obsidian vault, exposed to Claude over MCP"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "JOYA" }]
+dependencies = [
+    "sqlite-vec>=0.1.6",
+    "fastembed>=0.4.2",
+    "mcp>=1.2",
+]
+
+[project.scripts]
+joya-memory = "joya_memory.cli:main"
+joya-memory-mcp = "joya_memory.mcp_server:main"
+
+[tool.setuptools]
+packages = ["joya_memory"]

@@ -1,0 +1,20 @@
+node_modules/
+*.log
+*.pyc
+__pycache__/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# never commit secrets or per-install state
+.env
+*.env
+!deploy/*.env.example
+*.db
+*.db-wal
+*.db-shm
+setup.token
+session.secret
+.preview/

@@ -1,0 +1,63 @@
+# /etc/systemd/system/joya-chatgpt.service
+#
+# The ChatGPT broker: every agent on this server reaches ChatGPT through its
+# socket /run/joya-chatgpt/sock (ask_chatgpt, chatgpt/chatgpt_mcp.py). It runs
+# `codex exec` with the one ChatGPT sign-in in /root/.codex.
+#
+# Why root: Codex's own sandbox (bubblewrap) needs a user namespace, which this
+# Ubuntu's AppArmor allows unprivileged accounts only with an extra profile; so
+# Codex runs as root and is fenced in here instead. The model's commands are
+# further confined by Codex to the task's own folder with no network
+# (--sandbox workspace-write). What the whole service can see:
+#   - the system read-only; /root is empty except .codex (the sign-in);
+#   - writable: /var/lib/joya-chatgpt (task folders) and /root/.codex;
+#   - not at all: /opt (Odoo, the agents, JOYA AI, memory), the server's data
+#     and secrets in /etc and /var/lib, every log, other services' sockets.
+
+[Unit]
+Description=Joya ChatGPT broker (Codex CLI, one sign-in, every agent)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -I /usr/local/lib/joya-chatgpt/broker.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+RuntimeDirectory=joya-chatgpt
+RuntimeDirectoryMode=0755
+StateDirectory=joya-chatgpt
+StateDirectoryMode=0700
+WorkingDirectory=/var/lib/joya-chatgpt
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=tmpfs
+BindPaths=/root/.codex
+ReadWritePaths=/var/lib/joya-chatgpt
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+CapabilityBoundingSet=~CAP_SYS_PTRACE CAP_SYS_MODULE CAP_SYS_RAWIO CAP_SYS_BOOT CAP_SYS_TIME CAP_NET_ADMIN CAP_MKNOD CAP_AUDIT_CONTROL CAP_AUDIT_WRITE CAP_MAC_ADMIN CAP_MAC_OVERRIDE CAP_SYSLOG CAP_WAKE_ALARM CAP_LINUX_IMMUTABLE CAP_IPC_OWNER CAP_BPF CAP_PERFMON
+InaccessiblePaths=-/opt -/srv -/mnt -/media -/var/log -/var/backups -/var/spool -/var/mail
+InaccessiblePaths=-/etc/odoo -/etc/odoo-e2e -/etc/joya-ai -/etc/letsencrypt -/etc/ssh -/etc/monit -/etc/shadow -/etc/gshadow -/etc/shadow- -/etc/gshadow- -/etc/sudoers -/etc/sudoers.d -/etc/fail2ban -/etc/nginx -/etc/systemd -/etc/credstore
+InaccessiblePaths=-/var/lib/postgresql -/var/lib/odoo -/var/lib/odoo-e2e -/var/lib/joya-ai -/var/lib/joya-console -/var/lib/joya-dashboard -/var/lib/joya-voice -/var/lib/joya-voice-whisper -/var/lib/joya-voiceprint -/var/lib/giza_sync -/var/lib/letsencrypt -/var/lib/planning_engine_voice -/var/lib/private -/var/lib/sudo -/var/lib/fail2ban -/var/lib/nginx -/var/lib/docker -/var/lib/lxd -/var/lib/snapd
+InaccessiblePaths=-/run/joya-ai -/run/joya-voiceprint -/run/postgresql -/run/user -/run/credentials -/run/sudo -/run/sshd -/run/screen
+
+TimeoutStopSec=20
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=joya-chatgpt
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,65 @@
+# /etc/systemd/system/joya-agent@.service
+#
+# One instance per agent: `systemctl start joya-agent@sales-bot`.
+# Everything instance-specific lives in /opt/joya-agents/agents/%i, written by
+# the dashboard through joya-helper. Never edit an instance by hand -- the next
+# configuration change from the panel regenerates it.
+
+[Unit]
+Description=JOYA agent %i (Telegram bridge to Claude Code)
+Documentation=https://github.com/a-maraghy/Joya
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=joyaagent
+Group=joyaagent
+WorkingDirectory=/opt/joya-agents/agents/%i
+
+Environment=HOME=/opt/joya-agents/shared/home
+Environment=PATH=/opt/joya-agents/runtime/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=JOYA_MODEL_CACHE=/opt/joya-agents/shared/models
+Environment=PYTHONUNBUFFERED=1
+# Use the server's Claude Code, not the copy bundled with the Python SDK:
+# the bundled one (2.1.139) rejects newer models such as claude-opus-5-5
+# ("version 2.1.280 or newer is required", JOYA Pace 2026-10-25).
+Environment=CLAUDE_CLI_PATH=/usr/bin/claude
+
+# Claude authentication, shared by every agent (0640 root:joyaagent).
+# Leading '-' so an agent still starts to report a clear error if it is missing.
+EnvironmentFile=-/opt/joya-agents/shared/claude-auth.env
+EnvironmentFile=/opt/joya-agents/agents/%i/agent.env
+
+ExecStart=/opt/joya-agents/runtime/venv/bin/claude-telegram-bot
+
+Restart=always
+RestartSec=10
+MemoryMax=8G
+TasksMax=512
+
+# This process runs commands a language model chose. Give it as little of the
+# host as it can still do its job with. An attached project directory is added
+# back by a per-agent drop-in, not by widening these.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/joya-agents/agents/%i /opt/joya-agents/shared
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+LockPersonality=true
+RemoveIPC=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=joya-agent-%i
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,43 @@
+[Unit]
+Description=JOYA AI - the supervisor for the CEO Claude Code session
+Documentation=file:/root/joya-ai/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Root, HOME=/root, default Claude config dir: the only way JOYA AI shares the
+# session registry every other Claude Code session on this box uses. Under any
+# other account or CLAUDE_CONFIG_DIR it cannot see or message them.
+User=root
+Group=root
+WorkingDirectory=/root/joya-ai
+Environment=HOME=/root
+Environment=NODE_NO_WARNINGS=1
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning /opt/joya-ai/supervisor.js
+
+# Stopping: SIGTERM goes to the supervisor alone (KillMode=mixed), which closes
+# claude's stdin and lets it finish writing its transcript before anything is
+# killed. Whatever is still in the cgroup when the supervisor exits -- or when
+# TimeoutStopSec runs out -- is SIGKILLed, so a new supervisor never resumes a
+# session id an orphaned claude still holds.
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=40
+KillMode=mixed
+KillSignal=SIGTERM
+
+RuntimeDirectory=joya-ai
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=no
+StateDirectory=joya-ai
+StateDirectoryMode=0700
+LogsDirectory=joya-ai
+LogsDirectoryMode=0750
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=joya-ai
+
+[Install]
+WantedBy=multi-user.target

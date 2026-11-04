@@ -1,0 +1,21 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Monitor|SendMessage|mcp__memory__memory_forget|CronCreate|RemoteTrigger",
+        "hooks": [{ "type": "command", "command": "/usr/bin/node --disable-warning=ExperimentalWarning /opt/joya-ai/hooks/gate.js", "timeout": 10 }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "SendMessage|ListAgents",
+        "hooks": [{ "type": "command", "command": "/usr/bin/node /opt/joya-ai/hooks/ledger.js", "timeout": 5 }]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [{ "type": "command", "command": "/usr/bin/node /opt/joya-ai/hooks/ledger.js", "timeout": 5 }]
+      }
+    ]
+  }
+}

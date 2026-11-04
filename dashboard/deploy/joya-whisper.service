@@ -1,0 +1,41 @@
+[Unit]
+Description=JOYA speech-to-text (whisper.cpp, model resident)
+After=network.target
+
+[Service]
+Type=simple
+User=joyaspeech
+Group=joyaspeech
+ExecStart=/opt/joya-agents/shared/whisper.cpp/build/bin/whisper-server \
+  --model /opt/joya-agents/shared/whisper.cpp/models/ggml-tiny.en.bin \
+  --host 127.0.0.1 --port 8081 --threads 4 --convert -bo 1 -bs 1
+Restart=on-failure
+RestartSec=3
+
+# tiny.en, greedy. base.en was measured at 1.7s a request against tiny.en at
+# 0.9s, and the cost is flat in the length of the clip either way -- whisper
+# pads to a thirty-second window, so a one-second utterance costs what a ten-
+# second one does. For short spoken instructions the smaller model reads them
+# the same and answers in half the time.
+
+# --convert shells out to ffmpeg, which writes its intermediate wav into the
+# working directory. ProtectSystem=strict makes the filesystem read-only, so
+# without somewhere to write, every conversion failed -- quickly, and with a
+# 500 that looked like a fast success to anything only measuring the clock.
+# PrivateTmp gives this unit a /tmp of its own that nothing else can see.
+WorkingDirectory=/tmp
+Environment=LD_LIBRARY_PATH=/opt/joya-agents/shared/whisper.cpp/build/src:/opt/joya-agents/shared/whisper.cpp/build/ggml/src
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target

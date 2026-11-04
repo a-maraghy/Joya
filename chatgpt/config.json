@@ -1,0 +1,9 @@
+{
+  "allowed_users": ["root", "joyaagent", "joyaconsole"],
+  "max_running": 2,
+  "max_queued": 8,
+  "timeout_s": 600,
+  "max_answer_chars": 60000,
+  "keep_tasks_days": 7,
+  "model": ""
+}

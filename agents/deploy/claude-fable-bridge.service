@@ -1,0 +1,23 @@
+# /etc/systemd/system/claude-fable-bridge.service
+[Unit]
+Description=Claude Telegram Bridge (Claude Agent SDK)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=<linux-user>
+Environment=HOME=/home/<linux-user>
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# KEY=VALUE file containing CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-... (chmod 600)
+EnvironmentFile=/home/<linux-user>/.claude/oauth-systemd.env
+WorkingDirectory=/home/<linux-user>/claude-telegram-bot
+ExecStart=/home/<linux-user>/claude-telegram-bot/venv/bin/claude-telegram-bot
+Restart=always
+RestartSec=10
+MemoryMax=6G
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

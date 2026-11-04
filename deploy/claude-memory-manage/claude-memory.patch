@@ -1,0 +1,237 @@
+diff -ru a/README.md b/README.md
+--- a/README.md	2026-10-04 17:11:23.909342877 +0200
++++ b/README.md	2026-10-04 17:11:23.913342870 +0200
+@@ -171,3 +171,24 @@
+ `CLAUDE_CODE_OAUTH_TOKEN=...` (from `claude setup-token`) in `/root/.claude-memory/claude-auth.env` (600).
+ Watermark per session: `ingest_state` row `facts:<session_id>` = last chunk id processed.
+ Backfill history: `venv/bin/python extract_facts.py --pending` (many model calls; not automatic).
++
++## Hide and delete from the dashboard (Agents & sessions > Memory > Sessions)
++
++Installed by `Joya/deploy/claude-memory-manage/install.sh` (backup, `migrate.sql`, this patch,
++restart). The dashboard writes through `joya-helper` (`cc-mm-*`, root via sudo, bridge as `claude_mem`),
++permission `claude.memory.manage`, audited with counts only.
++
++| | Fact | Chunk |
++|---|---|---|
++| **Hide** (reversible) | `superseded_by = id` + `meta.forgotten_via = dashboard` (same as `memory_forget`) | `chunks.hidden = true` |
++| **Unhide** | `superseded_by = NULL`, retraction keys removed | `hidden = false` |
++| **Delete** | row deleted; older versions re-pointed to the surviving newer one, else hidden | row deleted + `memory_tombstones(content_hash)` |
++| **Delete session** | all its facts | all its chunks, its `ingest_state` rows (`<sid>.jsonl`, `<sid>/subagents/*`, `facts:<sid>`), and a row in `excluded_sessions` |
++
++Every read skips hidden chunks: `/search` (both chunk lists), the MCP keyword fallback,
++`memory_session` (`session_chunks`), fact extraction and `pending_sessions`, and the dashboard graph.
++`ingest.py` skips files of an excluded session (checked after taking the per-path lock) and never
++re-creates a tombstoned chunk; an upsert never touches `hidden`, so a hidden chunk stays hidden when
++its still-growing exchange is re-read. A full rebuild (truncate chunks + clear ingest_state) keeps
++exclusions and tombstones but loses `hidden` flags. Nightly dumps keep deleted rows until they rotate.
++`CLAUDE_MEMORY_SERVICE` (hooks, MCP) and `CLAUDE_MEMORY_HOOK_LOG` (hooks) exist for tests only.
+diff -ru a/app.py b/app.py
+--- a/app.py	2026-09-29 19:41:49.829070915 +0200
++++ b/app.py	2026-10-04 16:52:14.067060439 +0200
+@@ -81,7 +81,8 @@
+ # list and within the full-text list, so a fact only scores well if it really is near the top
+ # overall (a small facts table would otherwise put every fact in its own top 40). Reciprocal
+ # rank fusion (k = rrf_k) sums the two lists; fact scores are multiplied by fact_boost;
+-# superseded facts never enter. The full-text query ORs the query's lexemes (english stop
++# superseded facts never enter, and neither do chunks hidden from the dashboard (chunks.hidden;
++# a hidden fact is a retracted one: superseded_by = id). The full-text query ORs the query's lexemes (english stop
+ # words dropped) so a natural-language prompt still matches; 'simple' keeps identifiers whole.
+ # Only the fts_max_lexemes longest lexemes are ORed: a long prompt (hundreds of lexemes) matched
+ # nearly every row and ts_rank_cd over all of them took 1-2.5 s, which is what made the 400 ms
+@@ -100,7 +101,7 @@
+     ORDER BY d LIMIT %(n)s)
+   UNION ALL
+   (SELECT 'chunk', id, embedding <=> %(e)s::vector AS d FROM chunks
+-    WHERE embedding IS NOT NULL AND (%(p)s::text IS NULL OR project = %(p)s)
++    WHERE embedding IS NOT NULL AND NOT hidden AND (%(p)s::text IS NULL OR project = %(p)s)
+     ORDER BY d LIMIT %(n)s)
+ ),
+ fts AS (
+@@ -110,7 +111,7 @@
+     ORDER BY rk DESC LIMIT %(n)s)
+   UNION ALL
+   (SELECT 'chunk', id, ts_rank_cd(tsv, (SELECT q FROM tq), 32) AS rk FROM chunks
+-    WHERE tsv @@ (SELECT q FROM tq) AND (%(p)s::text IS NULL OR project = %(p)s)
++    WHERE tsv @@ (SELECT q FROM tq) AND NOT hidden AND (%(p)s::text IS NULL OR project = %(p)s)
+     ORDER BY rk DESC LIMIT %(n)s)
+ ),
+ ranked AS (
+diff -ru a/hooks/hooklib.py b/hooks/hooklib.py
+--- a/hooks/hooklib.py	2026-09-27 11:49:40.125011772 +0200
++++ b/hooks/hooklib.py	2026-10-04 16:51:26.411120792 +0200
+@@ -11,10 +11,10 @@
+ import time
+ import urllib.request
+ 
+-SERVICE = "http://127.0.0.1:8765"
++SERVICE = os.environ.get("CLAUDE_MEMORY_SERVICE") or "http://127.0.0.1:8765"
+ ROOT = "/opt/claude-memory"
+ PY = ROOT + "/venv/bin/python"
+-LOG = "/var/log/claude-memory-hooks.log"
++LOG = os.environ.get("CLAUDE_MEMORY_HOOK_LOG") or "/var/log/claude-memory-hooks.log"
+ SNIPPET = 600          # chars per hit
+ BUDGET = 9000          # chars for the whole block (~2,300 tokens)
+ 
+diff -ru a/ingest.py b/ingest.py
+--- a/ingest.py	2026-09-27 11:02:56.879764332 +0200
++++ b/ingest.py	2026-10-04 16:51:57.438081678 +0200
+@@ -54,6 +54,28 @@
+ 
+ REDACTIONS = Counter()
+ 
++# Memory managed from the dashboard (Agents & sessions > Memory > Sessions):
++#   excluded_sessions   a session deleted there is never indexed again, even though its
++#                       transcript (or a read-only archive copy) may still be on disk;
++#   memory_tombstones   a chunk deleted there one by one (by content_hash) is never re-created
++#                       when the still-growing last exchange of its transcript is re-read.
++# Both tables are optional: with an older schema they are simply not consulted.
++SESSION_IN_PATH = re.compile(
++    r"/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:\.jsonl$|/subagents/)")
++EXCLUDED = set()
++TOMBSTONES = False
++
++
++def load_exclusions(conn):
++    """Refresh EXCLUDED (session ids) and TOMBSTONES (table present) from the database."""
++    global EXCLUDED, TOMBSTONES
++    ex, tb = conn.execute("SELECT to_regclass('excluded_sessions') IS NOT NULL, "
++                          "to_regclass('memory_tombstones') IS NOT NULL").fetchone()
++    EXCLUDED = {r[0] for r in conn.execute("SELECT session_id FROM excluded_sessions").fetchall()} if ex else set()
++    TOMBSTONES = bool(tb)
++    conn.commit()
++    return EXCLUDED
++
+ 
+ def log(*a):
+     print(time.strftime("%H:%M:%S"), *a, file=sys.stderr, flush=True)
+@@ -467,6 +489,7 @@
+ 
+     def write(self, resume_off, resume_turn, eof=None):
+         rows, self.rows = self.rows, []
++        rows = [r for r in rows if r.get("session_id") not in EXCLUDED]
+         n = upsert(self.conn, rows)
+         self.stats["rows_written"] += n
+         self.stats["rows_seen"] += len(rows)
+@@ -499,6 +522,12 @@
+         r["meta"].setdefault("th", sha(r["content"]))
+         by_hash[r["content_hash"]] = r
+     rows = list(by_hash.values())
++    if TOMBSTONES:
++        dead = {r[0] for r in conn.execute("SELECT content_hash FROM memory_tombstones WHERE content_hash = ANY(%s)",
++                                           ([r["content_hash"] for r in rows],)).fetchall()}
++        rows = [r for r in rows if r["content_hash"] not in dead]
++        if not rows:
++            return 0
+     have = {h: (th, nrec) for h, th, nrec in conn.execute(
+         "SELECT content_hash, meta->>'th', COALESCE((meta->>'nrec')::int,0) FROM chunks WHERE content_hash = ANY(%s)",
+         ([r["content_hash"] for r in rows],)).fetchall()}
+@@ -535,6 +564,10 @@
+         log("busy (locked by another ingest), skipped:", path)
+         return True
+     try:
++        m = SESSION_IN_PATH.search(path)
++        if m and m.group(1) in load_exclusions(conn):
++            log("excluded (deleted from the dashboard), skipped:", path)
++            return True
+         fi = FileIngest(conn, path)
+         fi.run()
+         return fi.stats
+diff -ru a/mcp_server.py b/mcp_server.py
+--- a/mcp_server.py	2026-09-27 11:01:23.311898457 +0200
++++ b/mcp_server.py	2026-10-04 16:51:26.411120792 +0200
+@@ -9,7 +9,7 @@
+ from mcp.server.fastmcp import FastMCP  # noqa: E402
+ from memlib import facts as F  # noqa: E402
+ 
+-SERVICE = "http://127.0.0.1:8765"
++SERVICE = os.environ.get("CLAUDE_MEMORY_SERVICE") or "http://127.0.0.1:8765"
+ mcp = FastMCP("memory")
+ 
+ 
+@@ -33,7 +33,7 @@
+     with F.connect() as c:
+         rows = c.execute(
+             "SELECT 'chunk', id, content, session_id, ts, role, NULL, turn_index FROM chunks "
+-            "WHERE tsv @@ websearch_to_tsquery('simple', %(q)s) "
++            "WHERE NOT hidden AND tsv @@ websearch_to_tsquery('simple', %(q)s) "
+             "UNION ALL SELECT 'fact', id, content, source_session, ts, NULL, topic, NULL FROM facts "
+             "WHERE superseded_by IS NULL AND tsv @@ websearch_to_tsquery('simple', %(q)s) "
+             "ORDER BY 5 DESC LIMIT %(k)s", dict(q=query, k=k)).fetchall()
+diff -ru a/memlib/facts.py b/memlib/facts.py
+--- a/memlib/facts.py	2026-09-30 11:31:56.972416418 +0200
++++ b/memlib/facts.py	2026-10-04 16:52:14.068060437 +0200
+@@ -3,7 +3,8 @@
+ Facts are atomic, durable statements (decisions, verified figures, traps, user preferences,
+ open issues), each with a dotted `topic`. A fact is never deleted: an update or retraction
+ sets the old row's `superseded_by` (a retraction points at itself), and /search skips
+-superseded rows.
++superseded rows. Transcript chunks hidden from the dashboard (chunks.hidden) are skipped by every
++read here too: session_chunks (memory_session), extraction and pending_sessions.
+ 
+ Extraction (per session):  new transcript chunks since the session's watermark
+ (`ingest_state` row 'facts:<session_id>', bytes_ingested = last chunk id processed) ->
+@@ -161,14 +162,14 @@
+     """Ordered chunks of one session (id or unique prefix)."""
+     with connect() as c:
+         sids = [r[0] for r in c.execute(
+-            "SELECT DISTINCT session_id FROM chunks WHERE session_id LIKE %s LIMIT 5",
++            "SELECT DISTINCT session_id FROM chunks WHERE session_id LIKE %s AND NOT hidden LIMIT 5",
+             (session_id + "%",)).fetchall()]
+         if not sids:
+             return None, [], False
+         if len(sids) > 1 and session_id not in sids:
+             return sids, [], False
+         sid = session_id if session_id in sids else sids[0]
+-        q = ("SELECT turn_index, role, ts, content FROM chunks WHERE session_id = %s")
++        q = ("SELECT turn_index, role, ts, content FROM chunks WHERE session_id = %s AND NOT hidden")
+         args = [sid]
+         if around_turn is not None:
+             q += " AND turn_index BETWEEN %s AND %s"
+@@ -368,7 +369,7 @@
+         rows = c.execute(
+             "SELECT id, turn_index, CASE WHEN meta->>'subagent_id' IS NULL THEN role "
+             "ELSE 'subagent ' || role END, content, meta->>'subagent_id' FROM chunks "
+-            "WHERE session_id = %s AND id > %s AND source = 'transcript' ORDER BY ts, id",
++            "WHERE session_id = %s AND id > %s AND source = 'transcript' AND NOT hidden ORDER BY ts, id",
+             (sid, wm)).fetchall()
+         if not rows:
+             return dict(session=sid, skipped="no new chunks")
+@@ -417,7 +418,7 @@
+         rows = c.execute(
+             "SELECT ch.session_id, count(DISTINCT (ch.meta->>'subagent_id', ch.turn_index)), max(ch.ts) "
+             "FROM chunks ch LEFT JOIN ingest_state s ON s.file_path = 'facts:' || ch.session_id "
+-            "WHERE ch.source = 'transcript' AND ch.session_id IS NOT NULL "
++            "WHERE ch.source = 'transcript' AND ch.session_id IS NOT NULL AND NOT ch.hidden "
+             "AND ch.id > COALESCE(s.bytes_ingested, 0) GROUP BY ch.session_id "
+             "HAVING %(d)s::int IS NULL OR max(ch.ts) > now() - make_interval(days => %(d)s::int) "
+             "ORDER BY max(ch.ts) DESC", dict(d=since_days)).fetchall()
+diff -ru a/schema.sql b/schema.sql
+--- a/schema.sql	2026-09-27 10:44:50.021319962 +0200
++++ b/schema.sql	2026-10-04 16:51:57.438081678 +0200
+@@ -53,3 +53,25 @@
+ CREATE INDEX IF NOT EXISTS facts_content_trgm    ON facts USING gin (content gin_trgm_ops);
+ CREATE INDEX IF NOT EXISTS facts_ts              ON facts (ts);
+ CREATE INDEX IF NOT EXISTS facts_live            ON facts (id) WHERE superseded_by IS NULL;
++
++-- Memory managed from the dashboard (2026-10). A hidden chunk is kept but never searched,
++-- injected, extracted or shown in memory_session; a hidden fact is a retracted one
++-- (superseded_by = id), so facts need no column. Deleted sessions are excluded from ingest,
++-- and chunks deleted one by one leave a tombstone so ingest never re-creates them.
++ALTER TABLE chunks ADD COLUMN IF NOT EXISTS hidden boolean NOT NULL DEFAULT false;
++CREATE INDEX IF NOT EXISTS chunks_hidden ON chunks (session_id) WHERE hidden;
++
++CREATE TABLE IF NOT EXISTS excluded_sessions (
++    session_id    text PRIMARY KEY,
++    excluded_at   timestamptz NOT NULL DEFAULT now(),
++    excluded_by   text,
++    reason        text,
++    files_deleted boolean NOT NULL DEFAULT false
++);
++
++CREATE TABLE IF NOT EXISTS memory_tombstones (
++    content_hash text PRIMARY KEY,
++    session_id   text,
++    deleted_at   timestamptz NOT NULL DEFAULT now(),
++    deleted_by   text
++);

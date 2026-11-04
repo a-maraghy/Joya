@@ -1,0 +1,370 @@
+/*
+ * The Command Center's desktop render mode (/joya-ai?shell=desktop) and the
+ * sign-in pages as the JOYA AI desktop app shows them: no page, no frame, a
+ * transparent background, the pieces placed by public/joya-desktop.js.
+ * Text that sits straight on the wallpaper gets a tinted pill (the approved
+ * mockup's choice); cards and the composer are always solid. The ink follows
+ * the wallpaper: the app sets data-theme (dark theme = light ink on a dark or
+ * busy wallpaper, light theme = dark ink on a light one).
+ */
+html.cc-desk {
+  --dk-pill: rgba(10, 12, 30, .60);
+  --dk-pill-b: rgba(255, 255, 255, .12);
+  --dk-card: rgba(16, 18, 40, .92);
+  --dk-card-b: rgba(255, 255, 255, .14);
+  --dk-tx: #F2F3FA;
+  --dk-tx2: rgba(235, 238, 255, .72);
+  --dk-accent: #5FF0C8;
+  --dk-amber: #FABD4D;
+  --dk-shadow: 0 10px 36px rgba(0, 0, 0, .30);
+  background: transparent !important;
+}
+html.cc-desk[data-theme="light"] {
+  --dk-shadow: 0 8px 28px rgba(40, 20, 90, .14);
+  --dk-pill: rgba(255, 255, 255, .74);
+  --dk-pill-b: rgba(20, 10, 60, .10);
+  --dk-card: rgba(255, 255, 255, .95);
+  --dk-card-b: rgba(20, 10, 60, .12);
+  --dk-tx: #17142B;
+  --dk-tx2: rgba(30, 26, 60, .72);
+  --dk-accent: #007A57;
+  --dk-amber: #9A5A00;
+}
+html.cc-desk, html.cc-desk body { margin: 0; height: 100%; overflow: hidden; background: transparent !important; }
+html.cc-desk body { background-image: none !important; }
+
+/* No page round it: no top bar, sidebar, icon rail, page background, hint row or routing chip. */
+html.cc-desk .topbar, html.cc-desk .sidebar, html.cc-desk .nav-scrim, html.cc-desk .os-scrim, html.cc-desk .dock-band,
+html.cc-desk #cc-rail, html.cc-desk .cc-bg, html.cc-desk #cc-hint, html.cc-desk #cc-target, html.cc-desk #cc-vm, html.cc-desk .cc-vb-tags,
+html.cc-desk .cc-static, html.cc-desk #cc-cap, html.cc-desk #cc-cap-more, html.cc-desk #cc-reply,
+html.cc-desk .cc-sheet-scrim, html.cc-desk #cc-ring, html.cc-desk .cc-orbit { display: none !important; }
+html.cc-desk .layout, html.cc-desk .layout.bare, html.cc-desk main.content { background: transparent !important; padding: 0 !important; margin: 0 !important; border: 0 !important; }
+html.cc-desk .cc-shell { background: transparent; }
+html.cc-desk .cc-main { top: 0; display: block; pointer-events: none; }
+html.cc-desk .cc-main > * { pointer-events: none; }
+html.cc-desk .cc-stage { position: fixed; inset: 0; }
+
+/* The state under the core: a pill. */
+html.cc-desk .cc-caption { position: fixed; z-index: 6; transform: translateX(-50%); padding: 0; min-height: 0; gap: 0; display: block; pointer-events: none; }
+html.cc-desk .cc-cap-state { padding: 5px 12px; border-radius: 14px; background: var(--dk-pill); border: 1px solid var(--dk-pill-b); color: var(--dk-tx); box-shadow: 0 2px 14px rgba(0, 0, 0, .16); pointer-events: auto; }
+html.cc-desk .cc-cap-state[data-s="listening"], html.cc-desk .cc-cap-state[data-s="speaking"] { color: var(--dk-accent); }
+html.cc-desk .cc-cap-state[data-s="needs"] { color: var(--dk-amber); }
+
+/* Listening shows on the pill only: a small meter follows the microphone. */
+.dk-meter { display: none; }
+html.cc-desk .cc-cap-state[data-s="listening"] .dk-meter { display: inline-flex; align-items: center; gap: 2px; height: 10px; margin-left: 7px; vertical-align: -1px; }
+html.cc-desk .dk-meter i { display: block; width: 2px; height: 10px; border-radius: 1px; background: currentColor; transform: scaleY(.25); transform-origin: 50% 50%; transition: transform .09s linear; }
+
+/* The chat button: small, round, glass, on the core's lower right. A dot when a reply came while the panel was closed. */
+.dk-chatbtn, .dk-livebtn, .dk-panel { display: none; }
+html.cc-desk .dk-chatbtn, html.cc-desk .dk-livebtn:not([hidden]) { display: grid; place-items: center; position: fixed; z-index: 9; box-sizing: border-box; padding: 0; border-radius: 50%; cursor: pointer;
+  background: var(--dk-pill); border: 1px solid var(--dk-pill-b); color: var(--dk-tx); box-shadow: 0 2px 14px rgba(0, 0, 0, .18);
+  -webkit-backdrop-filter: blur(10px) saturate(1.3); backdrop-filter: blur(10px) saturate(1.3); transition: background .15s, border-color .15s, transform .15s; }
+html.cc-desk .dk-chatbtn:hover, html.cc-desk .dk-livebtn:hover { transform: scale(1.06); border-color: var(--dk-card-b); }
+html.cc-desk .dk-chatbtn:focus-visible, html.cc-desk .dk-livebtn:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 2px; }
+html.cc-desk .dk-chatbtn.on { background: var(--dk-card); color: var(--dk-accent); }
+html.cc-desk .dk-chatbtn .cc-i, html.cc-desk .dk-livebtn .cc-i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; stroke-linecap: round; }
+/* The live-call button: a waveform; on a call it turns into the red end-call button. */
+html.cc-desk .dk-livebtn .dk-end, html.cc-desk .dk-livebtn.on .dk-wave { display: none; }
+html.cc-desk .dk-livebtn.on .dk-end { display: inline; }
+html.cc-desk .dk-livebtn.on { background: #E5484D; border-color: rgba(255, 255, 255, .28); color: #fff; box-shadow: 0 2px 14px rgba(229, 72, 77, .35); }
+html.cc-desk .dk-livebtn.on .cc-i { stroke-width: 2.2; }
+html.cc-desk .dk-chatbtn .dk-dot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--dk-accent); box-shadow: 0 0 0 2px var(--dk-card); transform: scale(0); transition: transform .2s; }
+html.cc-desk .dk-chatbtn.unread .dk-dot { transform: scale(1); }
+
+/* The chat panel: the recent conversation and the composer, solid, opened from the button. */
+html.cc-desk .dk-panel:not([hidden]) { display: flex; flex-direction: column; position: fixed; z-index: 11; box-sizing: border-box; padding: 8px 10px 10px; border-radius: 18px;
+  background: var(--dk-card); border: 1px solid var(--dk-card-b); color: var(--dk-tx); box-shadow: var(--dk-shadow); animation: dk-in .18s ease-out; }
+html.cc-desk .dk-panel-hd { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 6px 6px; font: 600 13px var(--mono); letter-spacing: 0; color: var(--dk-tx2); }
+html.cc-desk .dk-panel-x { width: 26px; height: 26px; border: 0; border-radius: 8px; background: transparent; color: var(--dk-tx2); display: grid; place-items: center; padding: 0; cursor: pointer; }
+html.cc-desk .dk-panel-x:hover { background: rgba(128, 128, 128, .2); color: var(--dk-tx); }
+html.cc-desk .dk-panel-x .cc-i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
+html.cc-desk .dk-log { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 2px 4px 8px; scrollbar-width: thin; }
+html.cc-desk .dk-msg { max-width: 88%; padding: 7px 11px 8px; border-radius: 14px; font: 13.5px/1.4 var(--ui); overflow-wrap: anywhere; background: rgba(128, 128, 128, .12); }
+html.cc-desk .dk-msg b { display: block; font-size: 13px; letter-spacing: 0; margin-bottom: 2px; }
+html.cc-desk .dk-msg.ai { align-self: flex-start; border-bottom-left-radius: 5px; }
+html.cc-desk .dk-msg.ai b { color: var(--dk-accent); }
+html.cc-desk .dk-msg.me { align-self: flex-end; border-bottom-right-radius: 5px; background: color-mix(in srgb, var(--dk-accent) 14%, transparent); }
+html.cc-desk .dk-msg.me b { opacity: .6; text-align: right; }
+html.cc-desk .dk-msg.ghost { opacity: .75; font-style: italic; }
+html.cc-desk .dk-empty { margin: auto 0; text-align: center; font: 13px/1.4 var(--ui); color: var(--dk-tx2); }
+html.cc-desk .dk-panel-dock { flex: none; }
+
+/* The composer and the live call's bar, inside the panel. */
+html.cc-desk .cc-dock { position: static; padding: 0; gap: 0; display: block; }
+html.cc-desk .cc-composer, html.cc-desk .cc-voicebar { width: 100%; box-sizing: border-box; background: rgba(128, 128, 128, .10); border: 1px solid var(--dk-card-b); color: var(--dk-tx); box-shadow: none; }
+html.cc-desk .cc-composer { min-height: 48px; padding: 4px 6px 4px 12px; border-radius: 18px; gap: 2px; }
+html.cc-desk .cc-composer textarea { color: var(--dk-tx); font: 400 14px/20px var(--ui); padding: 8px 2px 2px; min-height: 36px; height: 36px; max-height: 128px; }
+html.cc-desk .cc-composer textarea::placeholder { color: var(--dk-tx2); }
+html.cc-desk .cc-c-row { margin-left: -6px; }
+html.cc-desk .cc-c-tool, html.cc-desk .cc-c-round { width: 36px; height: 36px; min-width: 36px; }
+html.cc-desk .cc-c-tool { color: var(--dk-tx); }
+html.cc-desk .cc-c-attach { border-color: var(--dk-card-b); }
+html.cc-desk .cc-chip { background: transparent; border-color: var(--dk-card-b); color: var(--dk-tx); height: 48px; }
+html.cc-desk .cc-chip .th { width: 36px; height: 36px; }
+html.cc-desk .cc-chip .x { width: 36px; height: 36px; color: var(--dk-tx2); }
+html.cc-desk .dk-msg span { white-space: pre-wrap; }
+html.cc-desk .cc-dock.calm:not(:hover):not(:focus-within) .cc-composer { opacity: 1; }
+html.cc-desk .dk-kb { font: 600 13px var(--mono); color: var(--dk-tx2); white-space: nowrap; flex: none; }
+/* Too narrow for the message box's placeholder (joya-desktop.js fitHint): the key caps alone, then nothing. */
+html.cc-desk .dk-kb.dk-kb-short .dk-kb-w { display: none; }
+html.cc-desk .dk-kb.dk-kb-none { display: none; }
+html.cc-desk .dk-kb b { border: 1px solid var(--dk-pill-b); border-radius: 4px; padding: 1px 5px; margin: 0 1px; font-weight: 600; }
+html.cc-desk[data-dk-mode="floating"] .dk-kb { display: none; }
+
+@keyframes dk-in { from { opacity: 0; transform: translateY(8px); } }
+
+/* Offline: the note under the core instead of the bubbles and the state pill (DESIGN.md "Signed out and offline"). */
+html.cc-desk .cc-shell:has(#cc-offline:not([hidden])) .cc-caption { display: none; }
+html.cc-desk:has(#cc-offline:not([hidden])) .dk-panel .cc-composer { opacity: .6; }
+html.cc-desk .cc-shell:has(#cc-offline:not([hidden])) #cc-core { filter: saturate(.25) brightness(.8); }
+html.cc-desk .cc-offline { background: var(--dk-card); border: 1px solid var(--dk-card-b); color: var(--dk-tx); width: 320px; box-sizing: border-box; text-align: center; }
+
+/* The decision card: the Command Center's own, solid, where the mode puts it. */
+html.cc-desk .cc-need { position: fixed; right: auto; z-index: 12; overflow: auto; background: var(--dk-card); border: 1px solid var(--dk-card-b); color: var(--dk-tx); box-shadow: 0 0 0 1px rgba(250, 189, 77, .55), 0 10px 40px rgba(250, 140, 40, .25); }
+html.cc-desk .cc-need h3, html.cc-desk .cc-need .why { color: var(--dk-tx); }
+html.cc-desk .cc-need .meta { color: var(--dk-tx2); }
+html.cc-desk #cc-needpill { position: fixed; z-index: 9; }
+
+/* The session names under the spheres, on tinted pills. */
+html.cc-desk .cc-kids > * { color: var(--dk-tx); }
+html.cc-desk .cc-kids .nm, html.cc-desk .cc-kids [class*="lab"] { background: var(--dk-pill); border: 1px solid var(--dk-pill-b); border-radius: 12px; padding: 3px 10px 4px; }
+
+/* The core's own click target (in Floating: the handle the box is dragged by), and the box's tools. */
+.dk-corehit, .dk-tools { display: none; }
+html.cc-desk .dk-corehit { display: block; position: fixed; z-index: 4; border-radius: 50%; cursor: pointer; }
+html.cc-desk[data-dk-mode="floating"] .dk-corehit { cursor: grab; }
+html.cc-desk .dk-tools:not([hidden]) { display: flex; position: fixed; z-index: 10; gap: 2px; padding: 3px; border-radius: 12px; background: var(--dk-card); border: 1px solid var(--dk-card-b); opacity: 0; transition: opacity .2s; }
+html.cc-desk .dk-tools:hover, html.cc-desk[data-dk-mode="floating"] body:hover .dk-tools { opacity: 1; }
+html.cc-desk .dk-tools button { width: 28px; height: 26px; border: 0; border-radius: 8px; background: transparent; display: grid; place-items: center; color: var(--dk-tx); padding: 0; }
+html.cc-desk .dk-tools button:hover { background: rgba(128, 128, 128, .25); }
+html.cc-desk .dk-tools .cc-i { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; }
+
+/* Notes the page raises: near the bottom, inside the window. */
+html.cc-desk .cc-toast { bottom: 24px !important; max-width: calc(100vw - 32px); }
+
+/* The session spheres' hover card: shown in the app's box too (joya-ai.css hides it under 720 px, for phones). */
+html.cc-desk .cc-kcard { display: block; width: min(290px, calc(100vw - 24px)); }
+
+/* Focus mode: only the core (its colour and motion still say the state). */
+html.cc-desk.dk-focus .dk-chatbtn, html.cc-desk.dk-focus .dk-livebtn, html.cc-desk.dk-focus .dk-panel, html.cc-desk.dk-focus .cc-kids, html.cc-desk.dk-focus .cc-family,
+html.cc-desk.dk-focus .cc-kcard, html.cc-desk.dk-focus .dk-tools, html.cc-desk.dk-focus #cc-needpill, html.cc-desk.dk-focus #cc-offline { display: none !important; }
+
+/* Peek: a light dim behind it while it shows. */
+html.cc-desk.dk-peek-open body { background: rgba(4, 6, 16, .34) !important; }
+html.cc-desk.dk-peek-open[data-theme="light"] body { background: rgba(235, 238, 250, .40) !important; }
+
+/* Battery saver: no transitions or animations beyond the still core. */
+html.cc-desk.dk-still *, html.cc-desk.dk-still *::before, html.cc-desk.dk-still *::after { animation: none !important; transition: none !important; }
+
+/* ---- the sign-in pages, as the app shows them: one solid card on the desktop ---- */
+html.cc-desk.dk-auth .auth-wrap { position: fixed; inset: 0; display: block; padding: 0; min-height: 0; background: transparent !important; }
+html.cc-desk.dk-auth .auth-lockup { display: none; }
+html.cc-desk.dk-auth .auth-wrap .card { position: fixed; z-index: 2; margin: 0; background: var(--dk-card); border: 1px solid var(--dk-card-b); color: var(--dk-tx); box-shadow: var(--dk-shadow); border-radius: 14px; }
+/* Signed out: the core grey and still above the card. */
+.dk-auth-core { display: none; }
+html.cc-desk.dk-auth .dk-auth-core { display: block; position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 1; pointer-events: none; filter: grayscale(1) brightness(.75); }
+html.cc-desk.dk-auth .auth-wrap .card label, html.cc-desk.dk-auth .auth-wrap .card h2 { color: var(--dk-tx); }
+html.cc-desk.dk-auth .auth-wrap .card .muted, html.cc-desk.dk-auth .auth-foot { color: var(--dk-tx2); }
+.dk-browser { margin-top: 12px; text-align: center; }
+.dk-or { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; color: var(--dk-tx2); font-size: 13px; }
+.dk-or::before, .dk-or::after { content: ""; flex: 1; height: 1px; background: var(--dk-card-b); }
+/* The browser hand-off is a full, big button: Windows Hello inside the app's window is not certain. */
+.dk-browser .dk-browser-btn { min-height: 44px; font-size: 14.5px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.dk-browser .dk-browser-btn.dk-urge { background: var(--accent, #14B8A6); border-color: transparent; color: #fff; }
+.dk-browser-note { display: block; margin-top: 6px; font-size: 13px; }
+html:not(.dk-host) .dk-browser { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  html.cc-desk .dk-panel:not([hidden]) { animation: none; }
+}
+
+/* Everything a click can open -- a session's conversation (the deep view), the forms, the palette, the
+   sheet -- goes where it fits: in Floating inside the box, elsewhere a large panel in the middle of the
+   screen (joya-desktop.js sets --dk-ov-x/y/w/h). Their scrims dim nothing (there is no page behind, only the
+   desktop) but still catch a click outside, which closes them. */
+html.cc-desk .cc-deep, html.cc-desk .cc-modal { position: fixed; left: var(--dk-ov-x) !important; top: var(--dk-ov-y) !important; width: var(--dk-ov-w) !important;
+  right: auto !important; bottom: auto !important; transform: none !important; max-height: var(--dk-ov-h); box-sizing: border-box; background: var(--dk-card); color: var(--dk-tx); border: 1px solid var(--dk-card-b); box-shadow: var(--dk-shadow); }
+html.cc-desk .cc-deep { height: var(--dk-ov-h); }
+html.cc-desk .cc-modal { overflow: auto; }
+html.cc-desk .cc-deep-body { overflow: auto; }
+html.cc-desk[data-dk-mode="floating"] .cc-deep-body { grid-template-columns: minmax(0, 1fr); }
+html.cc-desk .cc-sheet { top: var(--dk-ov-y) !important; bottom: auto !important; height: var(--dk-ov-h) !important; max-height: var(--dk-ov-h); right: auto !important; box-sizing: border-box;
+  left: calc(var(--dk-ov-x) + var(--dk-ov-w) - min(460px, var(--dk-ov-w))) !important; width: min(460px, var(--dk-ov-w)) !important; }
+html.cc-desk .cc-sheet.wide { left: var(--dk-ov-x) !important; width: var(--dk-ov-w) !important; }
+html.cc-desk .cc-scrim, html.cc-desk .cc-sheet-scrim, html.cc-desk .cc-sdlg-back { background: transparent !important; backdrop-filter: none !important; }
+html.cc-desk .cc-sdlg { background: var(--dk-card); color: var(--dk-tx); border-color: var(--dk-card-b); box-shadow: var(--dk-shadow); }
+html.cc-desk .cc-smenu { background: var(--dk-card); color: var(--dk-tx); border-color: var(--dk-card-b); }
+/* The voiceprint's verdict on the pill (joya-ai.js showVoiceprint): joya when it is you, red when it is not. */
+html.cc-desk { --dk-red: #FF8A8A; }
+html.cc-desk[data-theme="light"] { --dk-red: #B3261E; }
+html.cc-desk .cc-cap-state[data-vp="ok"] { color: var(--dk-accent); }
+html.cc-desk .cc-cap-state[data-vp="bad"] { color: var(--dk-red); }
+html.cc-desk .cc-cap-state[data-vp="mid"] { color: var(--dk-tx2); }
+html.cc-desk .cc-cap-state[data-vp] .dk-meter { display: none; }
+html.cc-desk .cc-cap-state[data-vp] { max-width: calc(100vw - 24px); white-space: normal; text-align: center; line-height: 1.25; } /* "Didn't recognise your voice, try again": two lines in a narrow window, never cut */
+
+/* ---- real blur (the app's acrylic windows behind the glass surfaces; desktop/src-tauri/src/blur.rs) ----
+   With html.dk-acrylic the app draws real blur under every surface the page reports as glass
+   (joya-desktop.js GLASS); a surface takes the lighter tint only once its blur is there
+   ([data-dk-glass]), so it never sits light over a sharp, busy wallpaper. Lighter, not clear: text keeps
+   its contrast over a blurred bright patch (cards about 6:1, pills about 3:1 at worst; the ink already
+   follows the wallpaper). The approval card stays near-solid: nobody misreads a destructive command
+   because of what is behind it. Without real blur (Windows 10 before 1809, transparency effects or the
+   setting off, high contrast, a faint opacity) none of this applies: the tinted look above. */
+html.cc-desk {
+  --dk-glass-pill: rgba(10, 12, 30, .46);
+  --dk-glass-card: rgba(16, 18, 40, .70);
+  --dk-glass-alert: rgba(16, 18, 40, .88);
+}
+html.cc-desk[data-theme="light"] {
+  --dk-glass-pill: rgba(255, 255, 255, .50);
+  --dk-glass-card: rgba(255, 255, 255, .70);
+  --dk-glass-alert: rgba(255, 255, 255, .90);
+}
+html.cc-desk.dk-acrylic [data-dk-glass] { transition: background-color .18s ease-out; }
+html.cc-desk.dk-acrylic [data-dk-glass="pill"]:not(.on) { background: var(--dk-glass-pill) !important; }
+html.cc-desk.dk-acrylic [data-dk-glass="card"] { background: var(--dk-glass-card) !important; }
+html.cc-desk.dk-acrylic [data-dk-glass="alert"] { background: var(--dk-glass-alert) !important; }
+@media (prefers-contrast: more) {
+  html.cc-desk.dk-acrylic [data-dk-glass="pill"]:not(.on) { background: var(--dk-pill) !important; }
+  html.cc-desk.dk-acrylic [data-dk-glass="card"], html.cc-desk.dk-acrylic [data-dk-glass="alert"] { background: var(--dk-card) !important; }
+}
+
+/* ---- the glance cards (0.1.9): approvals, sessions, today's tokens, live alerts, beside the core ----
+   joya-desktop.js places the column (JoyaDesktopLayout: L.glance) and fills it. The column itself never
+   catches the mouse -- only its cards and header bar are hit regions -- so the gaps let clicks through.
+   Glass like the chat panel (the real blur goes under each card once it holds still); an approval card
+   near-solid, as the decision card. Focus mode hides them; hold-still stops every motion. */
+.dk-glance, .dk-glbtn { display: none; }
+html.cc-desk .dk-glbtn:not([hidden]) { display: grid; place-items: center; position: fixed; z-index: 9; box-sizing: border-box; padding: 0; border-radius: 50%; cursor: pointer;
+  background: var(--dk-pill); border: 1px solid var(--dk-pill-b); color: var(--dk-tx2); box-shadow: 0 2px 14px rgba(0, 0, 0, .18); transition: transform .15s, color .15s; }
+html.cc-desk .dk-glbtn.on { color: var(--dk-accent); }
+html.cc-desk .dk-glbtn:hover { transform: scale(1.06); color: var(--dk-tx); }
+html.cc-desk .dk-glbtn:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 2px; }
+html.cc-desk .dk-glbtn .cc-i { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+
+html.cc-desk .dk-glance:not([hidden]) { display: flex; flex-direction: column; justify-content: flex-start; gap: 8px; position: fixed; z-index: 8; box-sizing: border-box;
+  overflow-y: auto; overflow-x: hidden; scrollbar-width: none; pointer-events: none; font: 13px/1.35 var(--ui); color: var(--dk-tx); }
+html.cc-desk .dk-glance::-webkit-scrollbar { display: none; }
+html.cc-desk .dk-glance[data-align="end"] { justify-content: flex-end; }
+html.cc-desk .dk-glance > *, html.cc-desk .dk-gl-cards > * { pointer-events: auto; }
+html.cc-desk .dk-gl-cards { display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+html.cc-desk .dk-glance.dk-gl-under { visibility: hidden; }
+
+/* The header bar: a pill with the title; on the desktop it is the handle that moves (and pins) the cards. */
+html.cc-desk .dk-gl-hd { display: flex; align-items: center; gap: 2px; align-self: stretch; box-sizing: border-box; height: 30px; flex: none; padding: 0 3px 0 6px; border-radius: 15px;
+  background: var(--dk-pill); border: 1px solid var(--dk-pill-b); box-shadow: 0 2px 14px rgba(0, 0, 0, .14); }
+html.cc-desk .dk-gl-grip { flex: 1; display: flex; align-items: center; gap: 4px; min-width: 0; height: 100%; color: var(--dk-tx2); font: 600 13px var(--mono); letter-spacing: 0; border-radius: 12px; }
+html.cc-desk .dk-gl-grip b { font-weight: 600; white-space: nowrap; }
+html.cc-desk .dk-gl-grip .cc-i { width: 14px; height: 14px; fill: currentColor; stroke: none; opacity: 0; }
+html.cc-desk[data-dk-mode="desktop"] .dk-gl-hd { cursor: grab; }
+html.cc-desk[data-dk-mode="desktop"] .dk-gl-grip .cc-i { opacity: .7; }
+html.cc-desk .dk-glance.dragging .dk-gl-hd { cursor: grabbing; }
+html.cc-desk .dk-gl-grip:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 1px; }
+html.cc-desk .dk-gl-ib { width: 24px; height: 24px; border: 0; border-radius: 12px; background: transparent; color: var(--dk-tx2); display: grid; place-items: center; padding: 0; cursor: pointer; }
+html.cc-desk .dk-gl-ib[hidden] { display: none; }
+html.cc-desk .dk-gl-ib:hover { background: rgba(128, 128, 128, .22); color: var(--dk-tx); }
+html.cc-desk .dk-gl-ib[aria-pressed="true"] { color: var(--dk-accent); }
+html.cc-desk .dk-gl-ib:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 0; }
+html.cc-desk .dk-gl-ib .cc-i { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+
+/* A card. */
+html.cc-desk .dk-gl-card { flex: none; box-sizing: border-box; padding: 9px 11px 10px; border-radius: 14px; background: var(--dk-card); border: 1px solid var(--dk-card-b); box-shadow: var(--dk-shadow); }
+html.cc-desk .dk-gl-card.dk-gl-in { animation: dk-gl-in .22s ease-out; }
+@keyframes dk-gl-in { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+html.cc-desk .dk-gl-k { display: flex; align-items: center; gap: 6px; min-height: 20px; font: 600 13px var(--mono); letter-spacing: 0; color: var(--dk-tx2); }
+html.cc-desk .dk-gl-k > span:not(.sp) { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+html.cc-desk .dk-gl-k .sp, html.cc-desk .dk-gl-acts .sp { flex: 1; }
+html.cc-desk .dk-gl-k small { font: 500 13px var(--ui); letter-spacing: 0; text-transform: none; color: var(--dk-tx2); white-space: nowrap; }
+html.cc-desk .dk-gl-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--dk-tx2); }
+html.cc-desk .dk-gl-dot.warn { background: var(--dk-amber); }
+html.cc-desk .dk-gl-dot.ok, html.cc-desk .dk-gl-dot.work { background: var(--dk-accent); }
+html.cc-desk .dk-gl-dot.err { background: var(--dk-red); }
+html.cc-desk .dk-gl-dot.idle, html.cc-desk .dk-gl-dot.info { background: rgba(128, 128, 128, .7); }
+html.cc-desk .dk-gl-quiet { padding: 7px 11px; }
+html.cc-desk .dk-gl-empty { margin: 4px 0 0; color: var(--dk-tx2); font-size: 13px; }
+
+/* The buttons. */
+html.cc-desk .dk-gl-b { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px; border-radius: 8px; border: 1px solid var(--dk-card-b); background: rgba(128, 128, 128, .12);
+  color: var(--dk-tx); font: 600 13px var(--ui); cursor: pointer; white-space: nowrap; }
+html.cc-desk .dk-gl-b:hover:not([disabled]) { background: rgba(128, 128, 128, .24); }
+html.cc-desk .dk-gl-b:focus-visible, html.cc-desk .dk-gl-names button:focus-visible, html.cc-desk .dk-gl-more:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 1px; }
+html.cc-desk .dk-gl-b[disabled] { opacity: .55; cursor: default; }
+html.cc-desk .dk-gl-b.pri { background: var(--dk-accent); border-color: transparent; color: #04241B; }
+html.cc-desk[data-theme="light"] .dk-gl-b.pri { color: #fff; }
+html.cc-desk .dk-gl-b.pri:hover:not([disabled]) { filter: brightness(1.08); background: var(--dk-accent); }
+html.cc-desk .dk-gl-b.link { height: 22px; padding: 0 6px; border: 0; background: transparent; color: var(--dk-accent); font: 600 13px var(--ui); letter-spacing: 0; text-transform: none; }
+html.cc-desk .dk-gl-b.link:hover:not([disabled]) { background: rgba(128, 128, 128, .16); }
+html.cc-desk .dk-gl-b .cc-i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+
+/* An approval: amber edge, the summary, the countdown, Approve (Windows Hello first) / Deny / Open. */
+html.cc-desk .dk-gl-ap { box-shadow: 0 0 0 1px rgba(250, 189, 77, .55), 0 8px 30px rgba(250, 140, 40, .22); }
+html.cc-desk .dk-gl-ap .dk-gl-k > span:first-of-type { color: var(--dk-amber); }
+html.cc-desk .dk-gl-sum { margin: 4px 0 8px; font: 500 13px/1.35 var(--ui); color: var(--dk-tx); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+html.cc-desk .dk-gl-left { font: 600 13px var(--mono); letter-spacing: 0; color: var(--dk-tx2); }
+html.cc-desk .dk-gl-left.low { color: var(--dk-red); }
+html.cc-desk .dk-gl-acts { display: flex; align-items: center; gap: 6px; }
+html.cc-desk .dk-gl-note { display: flex; align-items: center; gap: 5px; margin: -2px 0 8px; font-size: 13px; color: var(--dk-tx2); }
+html.cc-desk .dk-gl-note .cc-i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; }
+html.cc-desk .dk-gl-err { margin: -2px 0 8px; font-size: 13px; color: var(--dk-red); }
+html.cc-desk .dk-gl-more { display: block; width: 100%; margin-top: 8px; padding: 5px 0 0; border: 0; border-top: 1px solid var(--dk-card-b); background: transparent; color: var(--dk-amber); font: 600 13px var(--ui); text-align: left; cursor: pointer; }
+
+/* Sessions: three counts and the names that matter. */
+html.cc-desk .dk-gl-counts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 4px 0 6px; }
+html.cc-desk .dk-gl-counts span { display: flex; flex-direction: column; font-size: 13px; color: var(--dk-tx2); line-height: 1.2; }
+html.cc-desk .dk-gl-counts b { font: 600 19px/1.15 var(--ui); color: var(--dk-tx); font-variant-numeric: tabular-nums; }
+html.cc-desk .dk-gl-counts .w b { color: var(--dk-accent); }
+html.cc-desk .dk-gl-counts .a b { color: var(--dk-amber); }
+html.cc-desk .dk-gl-names { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+html.cc-desk .dk-gl-names button { display: flex; align-items: center; gap: 7px; box-sizing: border-box; padding: 5px 6px; margin: 0 -6px; width: calc(100% + 12px); border: 0; border-radius: 8px; background: transparent; color: var(--dk-tx); font: 500 13px var(--ui); text-align: left; cursor: pointer; }
+html.cc-desk .dk-gl-names button:hover { background: rgba(128, 128, 128, .16); }
+html.cc-desk .dk-gl-names .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html.cc-desk .dk-gl-names small { flex: none; max-width: 52%; color: var(--dk-tx2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Today: the tokens, the thin bar against the tightest cap. */
+html.cc-desk .dk-gl-big { display: flex; align-items: baseline; gap: 5px; margin: 2px 0 6px; }
+html.cc-desk .dk-gl-big b { font: 600 22px/1.1 var(--ui); font-variant-numeric: tabular-nums; }
+html.cc-desk .dk-gl-big span { color: var(--dk-tx2); font-size: 13px; }
+html.cc-desk .dk-gl-big em { margin-left: auto; font-style: normal; font-size: 13px; font-weight: 600; color: var(--dk-amber); }
+html.cc-desk .dk-gl-co.tone-over .dk-gl-big em { color: var(--dk-red); }
+html.cc-desk .dk-gl-bar { height: 4px; border-radius: 2px; background: rgba(128, 128, 128, .22); overflow: hidden; }
+html.cc-desk .dk-gl-bar i { display: block; height: 100%; border-radius: 2px; background: var(--dk-accent); transform-origin: 0 50%; transform: scaleX(0); transition: transform .4s ease-out; }
+html.cc-desk .dk-gl-co.tone-near .dk-gl-bar i { background: var(--dk-amber); }
+html.cc-desk .dk-gl-co.tone-over .dk-gl-bar i { background: var(--dk-red); }
+html.cc-desk .dk-gl-sub { margin-top: 5px; font-size: 13px; color: var(--dk-tx2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Live alerts: a short feed, newest first; a new one glows once. */
+html.cc-desk .dk-gl-alerts { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+html.cc-desk .dk-gl-alerts li { display: flex; align-items: baseline; gap: 7px; font-size: 13px; line-height: 1.3; border-radius: 6px; }
+html.cc-desk .dk-gl-alerts li .dk-gl-dot { transform: translateY(-1px); }
+html.cc-desk .dk-gl-alerts li span { flex: 1; min-width: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+html.cc-desk .dk-gl-alerts time { flex: none; color: var(--dk-tx2); font-size: 13px; font-variant-numeric: tabular-nums; }
+html.cc-desk .dk-gl-alerts li.new { animation: dk-gl-new 1.6s ease-out; }
+@keyframes dk-gl-new { from { background: color-mix(in srgb, var(--dk-accent) 26%, transparent); } to { background: transparent; } }
+
+/* Focus mode: not there. Hold still: nothing moves (the dk-still rule above stops every animation and transition). */
+html.cc-desk.dk-focus .dk-glance, html.cc-desk.dk-focus .dk-glbtn { display: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  html.cc-desk .dk-gl-card.dk-gl-in, html.cc-desk .dk-gl-alerts li.new { animation: none; }
+  html.cc-desk .dk-gl-bar i { transition: none; }
+}
+
+/* Companion mode (joya-desktop-companion.js): the bot alone, in a small topmost window the app keeps at the top
+   centre of the monitor you are working on. Only the bot (one canvas: its head and its own backplate) shows; the
+   Command Center's pieces rest until a click on the bot opens them (the app's Peek). No glass here. A quick fade
+   when it moves to another monitor or ducks out of full screen (dk-comp-faded). */
+#dk-comp { display: none; }
+html.cc-desk.dk-comp-out body > *:not(#dk-comp):not(#mp-cam) { visibility: hidden !important; } /* (eye contact's "Camera on" pill stays: the camera is open) */
+html.cc-desk.dk-comp-out #dk-comp:not([hidden]) { display: block; position: fixed; inset: 0; z-index: 40; pointer-events: none; visibility: visible; transition: opacity .16s ease; }
+html.cc-desk.dk-comp-out #mp-cam { transition: opacity .16s ease; }
+html.cc-desk.dk-comp-out.dk-comp-faded #dk-comp, html.cc-desk.dk-comp-out.dk-comp-faded #mp-cam { opacity: 0; }
+html.cc-desk.dk-comp-out.dk-comp-faded #dk-comp .dk-comp-hit, html.cc-desk.dk-comp-out.dk-comp-faded #mp-cam { pointer-events: none; }
+html.dk-still #dk-comp, html.dk-still #mp-cam { transition: none !important; }
+#dk-comp-cv { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.dk-comp-hit { position: absolute; box-sizing: border-box; margin: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; pointer-events: auto; }
+.dk-comp-hit:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 2px; }
+.dk-comp-hint { position: absolute; transform: translateX(-50%); padding: 4px 9px; border-radius: 10px; font: 600 13px/1.1 system-ui, sans-serif; white-space: nowrap;
+  background: var(--dk-pill); color: var(--dk-tx); border: 1px solid var(--dk-pill-b); opacity: 0; transition: opacity .18s; pointer-events: none; }
+html.dk-comp-attn .dk-comp-hint { opacity: 1; }
+html.dk-still .dk-comp-hint { transition: none; }

@@ -1,31 +1,31 @@
 #!/usr/bin/env bash
 #
-# Joya -- installs Mint OS in a few minutes, asking only what it must.
+# Joya's installer -- sets Joya up in a few minutes, asking only what it must.
 #
 #   curl -fsSL https://raw.githubusercontent.com/a-maraghy/Joya/main/install.sh | sudo bash
 #
 # Every question can be answered ahead of time, for a run with no questions at all
 # (this is what the AI install prompt in PROMPT.md does):
 #
-#   JOYA_WHERE=local|cloud   where Mint OS runs: this computer, or a cloud server
+#   JOYA_WHERE=local|cloud   where Joya runs: this computer, or a cloud server
 #   JOYA_PORT=3000           local: the port the panel listens on
-#   JOYA_DOMAIN=mint.example.com   cloud: the domain (empty = the server's IP address)
+#   JOYA_DOMAIN=joya.example.com   cloud: the domain (empty = the server's IP address)
 #   JOYA_EMAIL=you@example.com     cloud: email for certificate reminders (optional)
 #   JOYA_YES=1               do not ask "Install now?"
 #
-# Advanced: JOYA_REPO / JOYA_REF (the Mint OS repository and branch), JOYA_DIR (where
-# its code is kept, /opt/moni-ai-os), JOYA_HTTPS_PORT (cloud, 443).
+# Advanced: JOYA_REPO / JOYA_REF (the Joya repository and branch), JOYA_DIR (where
+# its code is kept, /opt/joya), JOYA_HTTPS_PORT (cloud, 443).
 #
 # Safe to run again: it updates what is there and keeps your data and settings.
 
 set -euo pipefail
 
 JOYA_URL="https://github.com/a-maraghy/Joya"
-REPO="${JOYA_REPO:-https://github.com/a-maraghy/MONI_AI_OS.git}"
+REPO="${JOYA_REPO:-https://github.com/a-maraghy/Joya.git}"
 REF="${JOYA_REF:-main}"
-DIR="${JOYA_DIR:-/opt/moni-ai-os}"
+DIR="${JOYA_DIR:-/opt/joya}"
 ANSWERS=/etc/joya/answers.env
-DATA=/var/lib/moni-dashboard
+DATA=/var/lib/joya-dashboard
 LOG=/var/log/joya-install.log
 
 # ------------------------------------------------------------------ output --
@@ -69,7 +69,7 @@ choose() { # choose VAR "Question" default value1 "Label 1" value2 "Label 2"
 
 # ------------------------------------------------------------ the machine --
 
-[[ $(uname -s) == Linux ]] || die "Mint OS runs on Linux. On a Mac, install it on a cloud server instead; on Windows, use Ubuntu in WSL (see $JOYA_URL#windows)."
+[[ $(uname -s) == Linux ]] || die "Joya runs on Linux. On a Mac, install it on a cloud server instead; on Windows, use Ubuntu in WSL (see $JOYA_URL#windows)."
 if [[ $EUID -ne 0 ]]; then
   [[ -f $0 ]] && command -v sudo >/dev/null || die "Joya needs administrator rights: run it with sudo (curl -fsSL .../install.sh | sudo bash)."
   printf 'Joya needs administrator rights; sudo may ask for your password.\n'
@@ -91,23 +91,23 @@ if [[ -f $ANSWERS ]]; then . "$ANSWERS"; HAVE_PREV=1; fi
 
 # ---------------------------------------------------------------- questions --
 
-printf '\n%sJoya%s -- installing %sMint OS%s\n' "$G" "$N" "$B" "$N"
+printf '\n%sJoya%s -- installer\n' "$G" "$N"
 printf 'A few short questions, then Joya does the rest. Press Enter to take the answer in [brackets].\n'
 
-choose JOYA_WHERE "Where are you installing Mint OS?" "${PREV_WHERE:-}" \
+choose JOYA_WHERE "Where are you installing Joya?" "${PREV_WHERE:-}" \
   local "This computer -- just for me, opened in the browser here" \
   cloud "A cloud server -- reachable from anywhere, with HTTPS"
 [[ $JOYA_WHERE == local || $JOYA_WHERE == cloud ]] || die "JOYA_WHERE must be local or cloud."
 
 if [[ $JOYA_WHERE == local ]]; then
-  ask JOYA_PORT "Which port should Mint OS use?" "${PREV_PORT:-3000}"
+  ask JOYA_PORT "Which port should Joya use?" "${PREV_PORT:-3000}"
   [[ $JOYA_PORT =~ ^[0-9]+$ ]] && ((JOYA_PORT >= 1024 && JOYA_PORT <= 65535)) || die "the port must be a number from 1024 to 65535."
   HOST=localhost
   URL="http://localhost:$JOYA_PORT"
 else
   IP=$(curl -fsS -4 --max-time 5 https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')
-  printf '\nIf you have a domain for Mint OS, point it at this server (%s) first.\n' "${IP:-its address}"
-  ask JOYA_DOMAIN "Your domain (example: mint.mycompany.com) -- or press Enter to use the IP address" "${PREV_DOMAIN:-}"
+  printf '\nIf you have a domain for Joya, point it at this server (%s) first.\n' "${IP:-its address}"
+  ask JOYA_DOMAIN "Your domain (example: joya.mycompany.com) -- or press Enter to use the IP address" "${PREV_DOMAIN:-}"
   JOYA_DOMAIN=$(printf '%s' "$JOYA_DOMAIN" | tr 'A-Z' 'a-z' | sed -E 's#^https?://##; s#/.*$##')
   if [[ -n $JOYA_DOMAIN ]]; then
     [[ $JOYA_DOMAIN =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]] || die "\"$JOYA_DOMAIN\" does not look like a domain name."
@@ -151,7 +151,7 @@ quiet apt-get update
 quiet apt-get install -y git curl ca-certificates rsync build-essential python3 python3-venv openssl
 ok "done"
 
-step "Getting Mint OS"
+step "Getting Joya"
 if [[ -d $DIR/.git ]]; then
   quiet git -C "$DIR" fetch --quiet origin "$REF"
   quiet git -C "$DIR" checkout --quiet "$REF"
@@ -162,45 +162,37 @@ fi
 ok "$(git -C "$DIR" log -1 --format='%h %s' | cut -c1-70)"
 
 step "Setting up the agent stack (this is the long step)"
-# The agent runtime is a private repository: without access, the panel installs and
-# agents wait for it. BatchMode: never stop to ask for an SSH password or host key.
-quiet env MONI_RUNTIME_OPTIONAL=1 GIT_TERMINAL_PROMPT=0 \
-  GIT_SSH_COMMAND='ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new' \
-  bash "$DIR/deploy/bootstrap.sh"
-if [[ -f /opt/moni-agents/runtime/pyproject.toml || -f /opt/moni-agents/runtime/setup.py ]]; then
-  ok "agents ready"; RUNTIME=1
-else
-  note "installed without the agent runtime (no access to it) -- the panel works; agents come later"; RUNTIME=0
-fi
+quiet bash "$DIR/deploy/bootstrap.sh"
+ok "agents ready"
 
-step "Setting up the Mint OS panel"
-install -d /etc/systemd/system/moni-dashboard.service.d
+step "Setting up the Joya panel"
+install -d /etc/systemd/system/joya-dashboard.service.d
 {
   echo "# Written by Joya ($JOYA_URL); re-run the installer to change it."
   echo "[Service]"
-  echo "Environment=MONI_BIND=127.0.0.1"
-  echo "Environment=MONI_PORT=$JOYA_PORT"
-  echo "Environment=MONI_PUBLIC_HOST=$HOST"
+  echo "Environment=JOYA_BIND=127.0.0.1"
+  echo "Environment=JOYA_PORT=$JOYA_PORT"
+  echo "Environment=JOYA_PUBLIC_HOST=$HOST"
   # Sign in with a username and password only: no authenticator app, no passkeys.
-  echo "Environment=MONI_PASSWORD_ONLY=1"
+  echo "Environment=JOYA_PASSWORD_ONLY=1"
   if [[ $JOYA_WHERE == local ]]; then
-    echo "Environment=MONI_PUBLIC_PORT=$JOYA_PORT"
-    echo "Environment=MONI_LOCAL_HTTP=1"
+    echo "Environment=JOYA_PUBLIC_PORT=$JOYA_PORT"
+    echo "Environment=JOYA_LOCAL_HTTP=1"
   else
-    echo "Environment=MONI_PUBLIC_PORT=$HTTPS_PORT"
+    echo "Environment=JOYA_PUBLIC_PORT=$HTTPS_PORT"
   fi
-} >/etc/systemd/system/moni-dashboard.service.d/joya.conf
+} >/etc/systemd/system/joya-dashboard.service.d/joya.conf
 systemctl daemon-reload
-quiet env MONI_DEPLOY_NOWAIT=1 bash "$DIR/deploy/deploy-dashboard.sh"
-quiet systemctl enable moni-dashboard
+quiet env JOYA_DEPLOY_NOWAIT=1 bash "$DIR/deploy/deploy-dashboard.sh"
+quiet systemctl enable joya-dashboard
 ok "running on 127.0.0.1:$JOYA_PORT"
 
 if [[ $JOYA_WHERE == cloud ]]; then
   step "Putting HTTPS in front of it"
   quiet apt-get install -y nginx fail2ban
   install -d /var/www/certbot
-  install -m 0644 "$DIR/dashboard/deploy/moni-proxy-params" /etc/nginx/moni-proxy-params
-  SITE=/etc/nginx/sites-available/mint-os
+  install -m 0644 "$DIR/dashboard/deploy/joya-proxy-params" /etc/nginx/joya-proxy-params
+  SITE=/etc/nginx/sites-available/joya-os
   # Port 80 first: it answers the certificate check and sends everyone else to HTTPS.
   cat >"$SITE" <<EOF
 # Written by Joya ($JOYA_URL).
@@ -212,7 +204,7 @@ server {
     location / { return 301 https://\$host$([[ $HTTPS_PORT == 443 ]] || printf ':%s' "$HTTPS_PORT")\$request_uri; }
 }
 EOF
-  ln -sf "$SITE" /etc/nginx/sites-enabled/mint-os
+  ln -sf "$SITE" /etc/nginx/sites-enabled/joya-os
   rm -f /etc/nginx/sites-enabled/default
   quiet nginx -t
   quiet systemctl reload-or-restart nginx
@@ -237,7 +229,7 @@ EOF
     chmod 0755 /etc/letsencrypt/renewal-hooks/deploy/joya-reload-nginx.sh
   else
     install -d -m 0700 /etc/joya/tls
-    CERT=/etc/joya/tls/mint-os.crt; KEY=/etc/joya/tls/mint-os.key
+    CERT=/etc/joya/tls/joya-os.crt; KEY=/etc/joya/tls/joya-os.key
     if [[ ! -f $CERT ]]; then
       quiet openssl req -x509 -newkey rsa:2048 -nodes -days 825 -subj "/CN=$HOST" \
         -addext "subjectAltName=IP:$HOST" -keyout "$KEY" -out "$CERT"
@@ -247,7 +239,7 @@ EOF
 
   cat >>"$SITE" <<EOF
 
-limit_req_zone \$binary_remote_addr zone=mint_login:10m rate=20r/m;
+limit_req_zone \$binary_remote_addr zone=joya_login:10m rate=20r/m;
 
 server {
     listen $HTTPS_PORT ssl http2;
@@ -259,7 +251,7 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers off;
     ssl_session_timeout 1d;
-    ssl_session_cache shared:MintSSL:10m;
+    ssl_session_cache shared:JoyaSSL:10m;
     ssl_session_tickets off;
     ssl_stapling $STAPLE;
     ssl_stapling_verify $STAPLE;
@@ -270,21 +262,21 @@ server {
     server_tokens off;
     client_max_body_size 48m;
 
-    access_log /var/log/nginx/mint-os-access.log;
-    error_log  /var/log/nginx/mint-os-error.log;
+    access_log /var/log/nginx/joya-os-access.log;
+    error_log  /var/log/nginx/joya-os-error.log;
 
-    location = /login { limit_req zone=mint_login burst=10 nodelay; proxy_pass http://127.0.0.1:$JOYA_PORT; include /etc/nginx/moni-proxy-params; }
-    location = /pair  { limit_req zone=mint_login burst=10 nodelay; proxy_pass http://127.0.0.1:$JOYA_PORT; include /etc/nginx/moni-proxy-params; }
-    location /        { proxy_pass http://127.0.0.1:$JOYA_PORT; include /etc/nginx/moni-proxy-params; }
+    location = /login { limit_req zone=joya_login burst=10 nodelay; proxy_pass http://127.0.0.1:$JOYA_PORT; include /etc/nginx/joya-proxy-params; }
+    location = /pair  { limit_req zone=joya_login burst=10 nodelay; proxy_pass http://127.0.0.1:$JOYA_PORT; include /etc/nginx/joya-proxy-params; }
+    location /        { proxy_pass http://127.0.0.1:$JOYA_PORT; include /etc/nginx/joya-proxy-params; }
 }
 EOF
   quiet nginx -t
   quiet systemctl reload nginx
   ok "HTTPS on port $HTTPS_PORT"
 
-  install -m 0644 "$DIR/dashboard/deploy/fail2ban-filter.conf" /etc/fail2ban/filter.d/moni-dashboard.conf
-  sed "s/^port .*/port     = $HTTPS_PORT/" "$DIR/dashboard/deploy/fail2ban-jail.conf" >/etc/fail2ban/jail.d/moni-dashboard.conf
-  touch /var/log/moni-dashboard/auth.log
+  install -m 0644 "$DIR/dashboard/deploy/fail2ban-filter.conf" /etc/fail2ban/filter.d/joya-dashboard.conf
+  sed "s/^port .*/port     = $HTTPS_PORT/" "$DIR/dashboard/deploy/fail2ban-jail.conf" >/etc/fail2ban/jail.d/joya-dashboard.conf
+  touch /var/log/joya-dashboard/auth.log
   quiet systemctl enable fail2ban
   quiet systemctl restart fail2ban
   ok "repeated wrong passwords are blocked (fail2ban)"
@@ -299,10 +291,10 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$JOYA_PORT/login" || true)
-[[ $code =~ ^(200|302)$ ]] || die "the panel does not answer (HTTP ${code:-none}). See: journalctl -u moni-dashboard -n 50"
-ok "Mint OS is up"
+[[ $code =~ ^(200|302)$ ]] || die "the panel does not answer (HTTP ${code:-none}). See: journalctl -u joya-dashboard -n 50"
+ok "Joya is up"
 
-printf '\n%sMint OS is installed.%s\n\n' "$G" "$N"
+printf '\n%sJoya is installed.%s\n\n' "$G" "$N"
 # /login sends to /setup only while there is no admin yet; after that the link is dead.
 if [[ -n $TOKEN && $code == 302 ]]; then
   printf 'Open this link to create your admin account (it works once):\n\n  %s%s/setup?token=%s%s\n\n' "$B" "$URL" "$TOKEN" "$N"
@@ -312,8 +304,7 @@ else
   printf 'Open %s and sign in with your admin account.\n' "$URL"
 fi
 if [[ $JOYA_WHERE == local ]]; then
-  printf 'Only this computer can open it. Mint OS starts by itself when the computer starts.\n'
+  printf 'Only this computer can open it. Joya starts by itself when the computer starts.\n'
 fi
 printf '\n%sNext:%s give the agents a Claude credential -- the panel'"'"'s Guide page shows how.\n' "$B" "$N"
-((RUNTIME)) || printf 'Agents (Telegram, WhatsApp) also need the agent runtime: ask the Mint OS owner for access, then run Joya again.\n'
 printf 'Run Joya again any time to update; your data stays. Help: %s\n' "$JOYA_URL"

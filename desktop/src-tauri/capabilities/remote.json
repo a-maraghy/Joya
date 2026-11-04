@@ -1,0 +1,33 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "remote-site",
+  "description": "What the site (joya.example.com, the Command Center's desktop render mode and its sign-in pages) may ask of the app: report its hit regions, its glass surfaces (for the real blur behind them) and status, ask for a toast, hide Peek, drag the box, use the box's tools, show / hide or pin the glance cards (a clamped position, remembered per monitor), open the Command Center from the companion bot (a click on it), say whether it holds the camera and switch camera presence off (never on), open the full Command Center, start the browser sign-in, say a Windows Hello sign-in starts or ends. Nothing that runs a program, reads a file or changes the app's other settings.",
+  "windows": [
+    "joya"
+  ],
+  "remote": {
+    "urls": [
+      "https://joya.example.com/*"
+    ]
+  },
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-get-state",
+    "allow-set-hit-regions",
+    "allow-set-blur-rects",
+    "allow-set-status",
+    "allow-needs-you",
+    "allow-hide-peek",
+    "allow-start-drag",
+    "allow-tool",
+    "allow-set-glance",
+    "allow-companion",
+    "allow-presence-status",
+    "allow-presence-off",
+    "allow-open-full-cc",
+    "allow-page-ready",
+    "allow-browser-signin",
+    "allow-webauthn-ceremony"
+  ]
+}

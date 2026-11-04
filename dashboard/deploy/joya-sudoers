@@ -1,0 +1,22 @@
+# The dashboard runs as `joyaadmin` and may run exactly one command as root:
+# the helper script, which validates every argument itself.
+# Deliberately NOT a wildcard path and NOT a shell.
+joyaadmin ALL=(root) NOPASSWD: /usr/local/sbin/joya-helper
+Defaults:joyaadmin !requiretty
+
+
+# The panel's own console runs as this account, and it holds unrestricted sudo.
+#
+# That is the point of it and not an oversight. The console is the administrator
+# sitting at the panel, already past a password and a TOTP code, doing what they
+# would otherwise do over SSH as root; gating it would be gating them from
+# themselves. It is a separate account from joyaagent precisely so the two
+# cannot be confused: an agent that strangers can message never gets this, and
+# every escalation the console makes is recorded in the sudo log under a name
+# that says where it came from.
+#
+# Claude Code refuses to bypass tool permissions while running as root, so the
+# console runs as an ordinary user who can sudo -- the shape it expects, and the
+# same reach by a route that leaves a trail.
+joyaconsole ALL=(ALL) NOPASSWD: ALL
+Defaults:joyaconsole !requiretty

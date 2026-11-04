@@ -1,0 +1,534 @@
+#!/usr/bin/env node
+"use strict";
+/**
+ * joya-ai-mcp: JOYA AI's own tools, as a stdio MCP server.
+ *
+ * The supervisor starts JOYA AI with this server in --mcp-config. Each tool is
+ * one call to the supervisor's control socket as actor "joya-ai", so the
+ * supervisor validates it, records it in the ledger, audits it and pushes it
+ * to the Command Center. Nothing here touches the machine: missions and
+ * decisions are JOYA AI's record of what it plans and proposes.
+ *
+ * Tools
+ *   mission_create        a multi-step goal with its steps
+ *   mission_step_add      another step
+ *   mission_step_update   a step's status / target / result
+ *   mission_update        close a mission (done, failed, cancelled) or retitle it
+ *   mission_list          open missions (or all)
+ *   mission_get           one mission with its steps
+ *   decision_propose      the finding and fix for a watcher's decision card
+ *   decision_update       the result of running an approved fix
+ *   status_snapshot       this VPS at a glance (read-only): services, disk,
+ *                         memory, live sessions, missions, open decisions and
+ *                         pending approvals -- counts and titles, never a command
+ *   ui_actions_list       the screen actions that exist right now (read-only)
+ *   session_hire          hire a worker session (its own context, supervised, gated)
+ *   session_retire        ASK the administrator to retire one it hired (a consent card; never ends it)
+ *   machine_list / machine_take_over / machine_tell / machine_release
+ *                         the user's own computers (Path A laptop control): a session ON the
+ *                         computer under a lease the user can stop; lib/machines.js
+ *   weather               the weather now and for the next days at a place (Open-Meteo, lib/weather.js;
+ *                         read-only, no key)
+ *   ui_do                 do one: change what the administrator sees in the tab
+ *                         they asked from (open a page or a panel, end the
+ *                         call...), during their own turn only; never approves,
+ *                         denies or changes a setting. Its schema never changes.
+ *
+ * Plain JSON-RPC 2.0 over newline-delimited stdio (MCP's stdio transport).
+ *
+ * Voice lanes (2026-10-30, supervisor lib/voicelane.js): a live call's small sessions start this server
+ * with JOYA_AI_LANE=<lane id>, sent with every call as `lane` so the supervisor knows which session's turn
+ * a screen action or a mission belongs to; JOYA_AI_MCP_SET=quick (the quick lane, registered as
+ * "joya-quick") serves the weather tool only.
+ */
+const net = require("net");
+const path = require("path");
+const readline = require("readline");
+const { FORBIDDEN_KEYS } = require(path.join(__dirname, "..", "lib", "snapshot.js"));
+const UiActions = require(path.join(__dirname, "..", "lib", "ui-actions.js"));
+const Widgets = require(path.join(__dirname, "..", "lib", "joya-widgets.js"));
+const { weather } = require(path.join(__dirname, "..", "lib", "weather.js"));
+const LANE = /^v[a-z0-9-]{1,60}$/.test(process.env.JOYA_AI_LANE || "") ? process.env.JOYA_AI_LANE : null;
+const QUICK_ONLY = process.env.JOYA_AI_MCP_SET === "quick";
+
+const SOCKET = process.env.JOYA_AI_SOCKET || "/run/joya-ai/joya-ai.sock";
+const STEP_STATUSES = ["planned", "delegated", "working", "waiting_approval", "done", "failed", "skipped"];
+const missionId = { type: "string", description: 'The mission, e.g. "M-12".' };
+
+/*
+ * Screen actions. A resumed claude CLI keeps the schema it first loaded for an
+ * MCP tool (a deferred_tools_record in its transcript) even after this server
+ * changes it -- so the tool that acts has a schema that never changes (ui_do:
+ * `action` a plain string, the arguments a fixed superset; validation stays on
+ * the supervisor and the page), and what exists right now is read at run time
+ * from ui_actions_list. Adding an action or a page never touches either schema.
+ * (The first tool, ui_action, carried an enum of the actions; a CLI that loaded
+ * it before page.open existed would never see page.open, whatever it was
+ * served later. It is gone, and ui_do is a new name, so it is discovered fresh.)
+ */
+function uiTools() {
+  return [
+    {
+      name: "ui_actions_list",
+      description:
+        "Read-only: the screen actions ui_do can do right now -- each action's name, what it does, its tier, whether it needs the administrator's " +
+        "confirmation, whether it works once a request, and its arguments with their allowed values (for page.open: the page keys and what each needs). " +
+        "Call it before ui_do whenever you are not sure an action or a value exists; it changes as Joya grows.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      noArgs: true,
+      local: () => UiActions.catalog(),
+    },
+    {
+      name: "ui_do",
+      op: "ui-action",
+      description:
+        "Change what the administrator sees in the tab they asked from (the Command Center, or the JOYA AI dock on another Joya page), at once -- " +
+        "for example open another page of Joya, open or close a panel, or end their voice call. The actions, their arguments and allowed values " +
+        "are listed by ui_actions_list: call it first; pass the action and its arguments as plain fields. " +
+        "Use it only while you answer a request the administrator sent from the Command Center, and only when they asked for it in that request. " +
+        "It cannot approve, deny or confirm anything, change keys, users, rules or settings, restart or deploy: approving stays the administrator's click. " +
+        "Actions marked needs_confirm only ASK: their result is confirm, nothing has changed yet, and the administrator confirms on screen or by voice; say only that you are waiting for their confirmation (never tell them to say yes); " +
+        "never say it is done and never confirm for them. The result says ok, refused (with why), confirm or no-screen; say what really happened.",
+      inputSchema: UiActions.stableSchema(),
+      map(given) {
+        const f = UiActions.fromTool(given);
+        if (f.extra.length) throw new Error("ui_do does not take: " + f.extra.join(", ") + " (see ui_actions_list)");
+        return { action: String(f.action || ""), args: f.args };
+      },
+      shape: (d) => d,
+    },
+    // The living canvas (2026-10-20): a widget alongside an answer. Same stability rule as ui_do: the schema
+    // is one object field and never changes; the building blocks are read at run time (ui_widgets_list).
+    {
+      name: "ui_widgets_list",
+      description:
+        "Read-only: the building blocks a widget may be made of right now -- the kinds, the block types and their fields, the named live sources and their views, " +
+        "the limits and the rules, with examples. Call it before ui_widget whenever you are not sure; it is versioned and grows as Joya does.",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      noArgs: true,
+      local: () => Widgets.catalog(),
+    },
+    {
+      name: "ui_widget",
+      op: "ui-widget",
+      description:
+        "Put a small live widget on the administrator's Command Center board, beside your answer: a spend chart, a files/diff table, a table, a waiting approval " +
+        "(it opens the existing decision card; approving stays theirs), two sessions compared, a session's story card, a metric or a list. " +
+        "The widget is JSON from the fixed building blocks listed by ui_widgets_list (call it first) -- never HTML, script, style or a URL. Prefer a named source " +
+        "(usage.spend, usage.caps, sessions, story, feed, approvals) so it stays live; payload data is small and bounded. " +
+        "Use it only while you answer a request the administrator sent from the Command Center, when a picture helps that answer, and always say the answer in words too. " +
+        "The result says ok, refused (with why: e.g. a kind they always dismiss -- then answer in words), or no-screen; say what really happened.",
+      inputSchema: {
+        type: "object",
+        properties: { widget: { type: "object", description: "The widget: {v, kind, title, note?, source?, size?, blocks} as ui_widgets_list describes." } },
+        required: ["widget"],
+        additionalProperties: false,
+      },
+      map(given) {
+        const extra = Object.keys(given || {}).filter((k) => k !== "widget");
+        if (extra.length) throw new Error("ui_widget takes only widget (see ui_widgets_list)");
+        const r = Widgets.validate(given.widget);
+        if (!r.ok) throw new Error("not a widget: " + r.why + " (see ui_widgets_list)");
+        return { widget: r.value };
+      },
+      shape: (d) => d,
+    },
+  ];
+}
+
+const TOOLS = [
+  {
+    name: "mission_create",
+    op: "mission-create",
+    description:
+      "Create a mission for a multi-step goal and record its steps. Use it whenever a goal needs more than one delegation or more than one session. " +
+      'Each step names who does it: a live session\'s name, or "joya-ai" (you, JOYA AI; "JOYA AI" is accepted too) for a step you do yourself. Returns the mission with its id (M-<n>). ' +
+      'Then delegate each step with "M-<n> step <k>" in the first line of the message, so the Command Center links the delegation to the step.',
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Short title, under 80 characters." },
+        goal: { type: "string", description: "The goal in one or two sentences, as the administrator gave it." },
+        steps: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { title: { type: "string" }, detail: { type: "string" }, target: { type: "string", description: 'Session name, or "joya-ai" for yourself (JOYA AI).' } },
+            required: ["title"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["title", "goal", "steps"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "mission_step_add",
+    op: "mission-step-add",
+    description: "Add a step to an open mission (numbered after the last one).",
+    inputSchema: {
+      type: "object",
+      properties: { mission_id: missionId, title: { type: "string" }, detail: { type: "string" }, target: { type: "string" } },
+      required: ["mission_id", "title"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "mission_step_update",
+    op: "mission-step-update",
+    description:
+      "Update one step: its status (" +
+      STEP_STATUSES.join(", ") +
+      "), target, result or note. Delegations tagged with the step move it automatically (sent -> delegated, working, done); " +
+      "set it yourself for steps you do, to record a result, or to mark a step done, failed or skipped.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        mission_id: missionId,
+        step: { type: "integer", minimum: 1 },
+        status: { type: "string", enum: STEP_STATUSES },
+        target: { type: "string" },
+        result: { type: "string", description: "One or two lines: what the step produced." },
+        note: { type: "string" },
+      },
+      required: ["mission_id", "step"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "mission_update",
+    op: "mission-update",
+    description: "Close a mission (done, failed, cancelled) or change its title. A mission is marked done by itself when every step is done or skipped.",
+    inputSchema: {
+      type: "object",
+      properties: { mission_id: missionId, status: { type: "string", enum: ["planned", "active", "done", "failed", "cancelled"] }, title: { type: "string" } },
+      required: ["mission_id"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "mission_list",
+    op: "missions",
+    description: "List missions with their steps: the open ones by default, or all.",
+    inputSchema: { type: "object", properties: { status: { type: "string", enum: ["active", "all"] } }, additionalProperties: false },
+    defaults: { status: "active" },
+  },
+  {
+    name: "mission_get",
+    op: "mission",
+    description: "One mission with its steps and metrics.",
+    inputSchema: { type: "object", properties: { mission_id: missionId }, required: ["mission_id"], additionalProperties: false },
+  },
+  {
+    name: "decision_propose",
+    op: "decision-propose",
+    description:
+      "After investigating a watcher alert (a turn that starts with [Watcher: … · decision #N]), record what you found and the fix you propose. " +
+      "It appears as a decision card with Approve / Dismiss / Ask more. Do not run the fix yourself: you will be asked to once it is approved. " +
+      "Leave fix_command out when nothing needs doing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        decision_id: { type: "integer", minimum: 1 },
+        summary: { type: "string", description: "The cause and what the fix does, in two or three short sentences." },
+        evidence: { type: "string", description: "The log lines or output you relied on (a few lines)." },
+        fix_command: { type: "string", description: "The exact shell command(s) you would run." },
+      },
+      required: ["decision_id", "summary"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "decision_update",
+    op: "decision-update",
+    description: "After running an approved fix, record whether it worked.",
+    inputSchema: {
+      type: "object",
+      properties: { decision_id: { type: "integer", minimum: 1 }, status: { type: "string", enum: ["done", "failed"] }, result: { type: "string" } },
+      required: ["decision_id", "status"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "status_snapshot",
+    op: "snapshot",
+    description:
+      "This VPS at a glance, read-only and instant: CPU, memory and disk (in GB and whole percent), the tracked services and which failed, " +
+      "the live sessions, open missions with their steps, open decisions and pending approvals (counts and titles), and your own queue. " +
+      "Use it FIRST for any status question; run shell checks only for what it does not cover.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    noArgs: true,
+    shape: snapshotView,
+  },
+  {
+    name: "weather",
+    description:
+      "The weather now and for the next days at a place, from Open-Meteo (a real forecast service): the sky in words, temperature and " +
+      "feels-like in °C, humidity, wind in km/h, each day's low, high and chance of rain. Read-only. Give the place by name (a city or area, " +
+      "e.g. \"6th of October City\", \"Cairo\") or as lat/lon. Never state the weather without calling this.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        place: { type: "string", description: "The city or area, e.g. \"6th of October City\"." },
+        lat: { type: "number", description: "Optional: latitude, instead of a name." },
+        lon: { type: "number", description: "Optional: longitude, instead of a name." },
+        days: { type: "integer", description: "How many days of forecast, 1 to 7 (default 2: today and tomorrow)." },
+      },
+      additionalProperties: false,
+    },
+    local: (a) => weather(a),
+    shape: (d) => d,
+  },
+  ...uiTools(),
+  // Hired sessions (M-6). Stable schemas from day one: plain strings, no enums (a resumed CLI keeps what it first loaded).
+  {
+    name: "session_hire",
+    op: "session-hire",
+    description:
+      "Hire a worker session: start a new Claude Code session with its own context, under the given display name, in the given directory, " +
+      "whose first message is the purpose (marked as coming from you, JOYA AI, not the administrator). Hire only when a job needs its own context " +
+      "and no existing session fits. It runs supervised (it survives restarts), is listed by ListAgents and reached with SendMessage; its " +
+      "destructive actions wait for the administrator's approval like yours, and it inherits none of your always-allow rules. Limits: at most 7 " +
+      "sessions, a unique name, a directory under /root (not a hidden one), 3 hires an hour. You can NEVER retire it yourself: see session_retire.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "The session's display name, e.g. \"Session Birth\" (1-48 characters, unique)." },
+        cwd: { type: "string", description: "Its working directory: an existing directory under /root/joya or /root, e.g. \"/root/joya\"." },
+        purpose: { type: "string", description: "What it is for, in a few sentences: this is its first message." },
+        model: { type: "string", description: "Optional: a claude-* model id (default: yours)." },
+      },
+      required: ["name", "cwd", "purpose"],
+      additionalProperties: false,
+    },
+    shape: (d) => d,
+  },
+  {
+    name: "session_retire",
+    op: "session-retire",
+    description:
+      "ASK the administrator to retire a session you hired. It never ends a session by itself: it raises a consent card in the Command Center, " +
+      "and only if the administrator approves is the session ended (gracefully; its transcript is kept). Refused for kept sessions and for any " +
+      "session not hired through session_hire (the administrator's own sessions are never yours to retire). Name it by name, ListAgents ref or " +
+      "session_id. The result's status is consent: say that nothing has ended and it waits for the administrator.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "The session's name." },
+        ref: { type: "string", description: "Or its ListAgents ref (the hex in [ ])." },
+        session_id: { type: "string", description: "Or its session id." },
+        note: { type: "string", description: "Optional: why, in one line, shown to the administrator." },
+      },
+      additionalProperties: false,
+    },
+    map(given) {
+      if (!given.name && !given.ref && !given.session_id) throw new Error("name, ref or session_id is required");
+      return given;
+    },
+    shape: (d) => d,
+  },
+  // The user's own computers (Path A laptop control, 2026-10-08). Stable schemas: plain strings and a number.
+  {
+    name: "machine_list",
+    op: "machines",
+    description:
+      "Read-only: the user's computers linked to Joya (through the JOYA AI desktop app): id, name, whether it is online now, whether Claude Code is " +
+      "installed there (claude_code: found <version> / not found / unknown), whether its Chrome can be used (browser: connected / set up / " +
+      "set up, not connected in the last session / not set up / off / unknown), its Office apps (office), and the session you run on it, if any.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    noArgs: true,
+    shape: (d) => d,
+  },
+  {
+    name: "machine_take_over",
+    op: "machine-take-over",
+    description:
+      "Take over one of the user's own computers, ONLY when the user asked you to do something on it. It hires a " +
+      "session that runs ON that computer (Claude Code there) under a control lease (default 15 minutes, at most 60). What that session can do: " +
+      "read, write and edit the user's files; run PowerShell and other commands; open files and apps (Start-Process); create Word, Excel and " +
+      "PowerPoint files (create_document); read and edit existing Word, Excel and PowerPoint files (a new copy by default); read and merge PDFs " +
+      "and make PDFs; ask the user for approval; wait. When machine_list says its browser is set up, it can also use the user's own Chrome " +
+      "through their Claude in Chrome extension (open and read pages, fill in fields, click). Outside Chrome it has NO screen, mouse or keyboard " +
+      "control: it cannot see the screen or click or type into other apps, so do not offer those. The user sees a glowing frame and can stop it " +
+      "at any moment; sending, submitting, buying, posting, deleting, installing, writing over a file or touching files outside " +
+      "theirs waits for their approval in Joya (Windows Hello); it never types passwords or payment details. Refused " +
+      "unless this turn is the administrator's own request (typed in the Command Center, or said aloud and recognised by the voiceprint as someone " +
+      "who may give commands). Refused at once when that computer reports Claude Code is not installed (the error says what the user must do). " +
+      "If the session cannot start there, a Joya turn tells you why: pass that on plainly. Its reports reach you as turns; give more instructions " +
+      "with machine_tell; machine_release when done.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        machine: { type: "string", description: "The computer's name or id (machine_list); may be left out when only one is linked." },
+        purpose: { type: "string", description: "What to do there, in plain words: this is the laptop session's first message." },
+        minutes: { type: "number", description: "Optional: the lease in minutes, 1-60 (default 15). Only the user can extend it." },
+      },
+      required: ["purpose"],
+      additionalProperties: false,
+    },
+    map(given) {
+      const out = { purpose: given.purpose };
+      if (given.machine !== undefined && given.machine !== "") out.machine = String(given.machine);
+      if (given.minutes !== undefined && given.minutes !== null) out.minutes = Math.round(Number(given.minutes));
+      return out;
+    },
+    shape: (d) => d,
+  },
+  {
+    name: "machine_tell",
+    op: "machine-tell",
+    description: "Send a further instruction to the session you run on one of the user's computers (machine_take_over first). Marked as coming from you.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        machine: { type: "string", description: "The computer's name or id; may be left out when only one is linked." },
+        message: { type: "string", description: "What to tell it." },
+      },
+      required: ["message"],
+      additionalProperties: false,
+    },
+    shape: (d) => d,
+  },
+  {
+    name: "machine_release",
+    op: "machine-release",
+    description: "Hand the computer back to the user: ends the control lease at once and closes the session there. Do it as soon as the job is done.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        machine: { type: "string", description: "The computer's name or id; may be left out when only one is linked." },
+        note: { type: "string", description: "Optional: why, in one line." },
+      },
+      additionalProperties: false,
+    },
+    shape: (d) => d,
+  },
+];
+
+/**
+ * What status_snapshot hands the model: the supervisor's snapshot minus
+ * anything that is not status. The supervisor already redacts and clips it
+ * and never puts a command in it; this drops the forbidden keys again at any
+ * depth (belt and braces) and the voice desk's own request list, which is not
+ * JOYA AI's to read.
+ */
+function snapshotView(data) {
+  const strip = (v) => {
+    if (Array.isArray(v)) return v.map(strip);
+    if (!v || typeof v !== "object") return v;
+    const o = {};
+    for (const [k, x] of Object.entries(v)) if (!FORBIDDEN_KEYS.includes(k) && k !== "requests_to_joya_ai") o[k] = strip(x);
+    return o;
+  };
+  return strip(data || {});
+}
+
+let n = 0;
+function call(op, params) {
+  return new Promise((resolve, reject) => {
+    const s = net.createConnection(SOCKET);
+    let buf = "";
+    const timer = setTimeout(() => {
+      s.destroy();
+      reject(new Error("the JOYA AI supervisor did not answer"));
+    }, 20000);
+    s.setEncoding("utf8");
+    s.on("error", (e) => {
+      clearTimeout(timer);
+      reject(new Error("cannot reach the JOYA AI supervisor: " + e.message));
+    });
+    s.on("connect", () => s.write(JSON.stringify({ id: "mcp" + ++n, op, actor: "joya-ai", ...(LANE ? { lane: LANE } : {}), ...params }) + "\n"));
+    s.on("data", (c) => {
+      buf += c;
+      const nl = buf.indexOf("\n");
+      if (nl === -1) return;
+      clearTimeout(timer);
+      s.destroy();
+      let msg;
+      try {
+        msg = JSON.parse(buf.slice(0, nl));
+      } catch (_) {
+        return reject(new Error("unreadable reply"));
+      }
+      if (msg.ok) resolve(msg.data);
+      else reject(new Error(msg.error || "refused"));
+    });
+  });
+}
+
+/** Keep tool results short: the model needs ids and statuses, not everything. */
+function brief(data) {
+  const m = data && data.mission;
+  const one = (x) => ({
+    id: x.ref,
+    title: x.title,
+    status: x.status,
+    steps: (x.steps || []).map((s) => ({ step: s.n, title: s.title, target: s.target, status: s.status, result: s.result || undefined })),
+  });
+  if (m) return one(m);
+  if (data && Array.isArray(data.missions)) return data.missions.map(one);
+  if (data && data.decision) return { decision: data.decision.id, status: data.decision.status };
+  return data;
+}
+
+const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
+/** The tools this instance serves: all of them, or the weather alone for a voice call's quick lane. */
+const served = () => (QUICK_ONLY ? TOOLS.filter((t) => t.name === "weather") : TOOLS);
+
+async function onMessage(msg) {
+  const { id, method, params } = msg;
+  if (method === "initialize") {
+    return out({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        protocolVersion: (params && params.protocolVersion) || "2025-06-18",
+        capabilities: { tools: {} },
+        serverInfo: { name: QUICK_ONLY ? "joya-quick" : "joya-ai", version: "1.0.0" }, // registered as "joya-ai" (supervisor.js MCP_NAME)
+        instructions: QUICK_ONLY ? "weather: the weather now and for the next days at a place (Open-Meteo)." :
+          "JOYA AI's missions and decision proposals, recorded by the supervisor and shown in the Command Center; status_snapshot: this VPS at a glance, read-only; " +
+          "ui_actions_list / ui_do: change what the administrator sees in the tab they asked from, during their own request only (list first, then do); " +
+          "ui_widgets_list / ui_widget: a small live widget beside your answer on their board, built only from fixed building blocks (list first; words always too); " +
+          "session_hire / session_retire: hire a worker session, and ASK the administrator to retire one you hired (never ends it yourself); " +
+          "machine_list / machine_take_over / machine_tell / machine_release: work on the user's own computer when they ask, under a lease they can stop.",
+      },
+    });
+  }
+  if (method === "notifications/initialized" || (method && method.startsWith("notifications/"))) return;
+  if (method === "ping") return out({ jsonrpc: "2.0", id, result: {} });
+  if (method === "tools/list") return out({ jsonrpc: "2.0", id, result: { tools: served().map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) } });
+  if (method === "tools/call") {
+    const tool = served().find((t) => t.name === (params && params.name));
+    if (!tool) return out({ jsonrpc: "2.0", id, error: { code: -32602, message: "unknown tool" } });
+    try {
+      const given = (params && params.arguments) || {};
+      if (tool.noArgs && (typeof given !== "object" || Array.isArray(given) || Object.keys(given).length))
+        throw new Error(tool.name + " takes no arguments");
+      let args = tool.noArgs ? {} : { ...(tool.defaults || {}), ...given };
+      if (tool.map) args = tool.map(args);
+      const data = tool.local ? await tool.local(args) : await call(tool.op, args);
+      const view = tool.shape ? tool.shape(data) : brief(data);
+      return out({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(view) }] } });
+    } catch (e) {
+      return out({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "Error: " + e.message }], isError: true } });
+    }
+  }
+  if (id !== undefined) out({ jsonrpc: "2.0", id, error: { code: -32601, message: "method not found" } });
+}
+
+if (require.main === module) {
+  const rl = readline.createInterface({ input: process.stdin });
+  rl.on("line", (line) => {
+    let msg;
+    try {
+      msg = JSON.parse(line);
+    } catch (_) {
+      return;
+    }
+    onMessage(msg).catch(() => {});
+  });
+  rl.on("close", () => process.exit(0));
+}
+
+module.exports = { TOOLS, brief, snapshotView, onMessage };

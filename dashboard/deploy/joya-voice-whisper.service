@@ -1,0 +1,48 @@
+[Unit]
+Description=JOYA voice transcription on this server (whisper.cpp; runs only while a local model is selected)
+Documentation=file:/opt/joya-dashboard/lib/voice-transcribe.js
+After=network.target
+
+# Started and stopped by the panel through the helper (joya-helper
+# voice-whisper-set): choosing a local model in JOYA AI > Settings > Voice >
+# Transcription enables and starts it; choosing an OpenAI model stops and
+# disables it. Nothing else starts it. Installed with its binary and models by
+# deploy/install-voice-whisper.sh.
+
+[Service]
+Type=simple
+User=joyaspeech
+Group=joyaspeech
+# WHISPER_MODEL=/var/lib/joya-voice-whisper/models/ggml-<model>.bin (the helper writes it)
+EnvironmentFile=/var/lib/joya-voice-whisper/server.env
+# The binary's own copy of its libraries (its RUNPATH names the build tree it came from).
+Environment=LD_LIBRARY_PATH=/var/lib/joya-voice-whisper/bin
+# 8 threads, niced: measured 2026-09-30 on this 12-vCPU box -- Odoo and the
+# panel stayed responsive while it ran. -l auto is only the default: each
+# request names the language setting. Silero VAD: silence and noise come back
+# empty instead of "you" / "*thud*". Loopback only.
+ExecStart=/var/lib/joya-voice-whisper/bin/whisper-server \
+  --model ${WHISPER_MODEL} \
+  --host 127.0.0.1 --port 8093 \
+  --threads 8 --language auto --no-timestamps \
+  --vad --vad-model /var/lib/joya-voice-whisper/models/ggml-silero-v5.1.2.bin \
+  --public /var/lib/joya-voice-whisper/public
+Nice=10
+CPUWeight=50
+MemoryMax=2500M
+Restart=on-failure
+RestartSec=5
+
+WorkingDirectory=/tmp
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

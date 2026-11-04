@@ -1,0 +1,65 @@
+{
+  "made": "dashboard/tools/make-agent-bots.cjs",
+  "roles": [
+    {
+      "role": "hired",
+      "head": "cap",
+      "files": [
+        "avatar-hired.png",
+        "sticker-hired-ready.webm",
+        "sticker-hired-thinking.webm",
+        "sticker-hired-done.webm"
+      ]
+    },
+    {
+      "role": "planning",
+      "head": "mortar",
+      "files": [
+        "avatar-planning.png",
+        "sticker-planning-ready.webm",
+        "sticker-planning-thinking.webm",
+        "sticker-planning-done.webm"
+      ]
+    },
+    {
+      "role": "erp",
+      "head": "headset",
+      "files": [
+        "avatar-erp.png",
+        "sticker-erp-ready.webm",
+        "sticker-erp-thinking.webm",
+        "sticker-erp-done.webm"
+      ]
+    },
+    {
+      "role": "builder",
+      "head": "antennas",
+      "files": [
+        "avatar-builder.png",
+        "sticker-builder-ready.webm",
+        "sticker-builder-thinking.webm",
+        "sticker-builder-done.webm"
+      ]
+    },
+    {
+      "role": "other",
+      "head": "headphones",
+      "files": [
+        "avatar-other.png",
+        "sticker-other-ready.webm",
+        "sticker-other-thinking.webm",
+        "sticker-other-done.webm"
+      ]
+    },
+    {
+      "role": "core",
+      "head": "cap",
+      "files": [
+        "avatar-core.png",
+        "sticker-core-ready.webm",
+        "sticker-core-thinking.webm",
+        "sticker-core-done.webm"
+      ]
+    }
+  ]
+}

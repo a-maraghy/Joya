@@ -1,0 +1,31 @@
+[Unit]
+Description=JOYA AI hired session %i
+Documentation=file:/opt/joya-ai/bin/joya-session
+# Hired by JOYA AI (or the administrator) through the supervisor's session-hire op (M-6).
+# Independent of joya-ai.service: it outlives JOYA AI's and the dashboard's restarts. Only a
+# retire the administrator consented to stops it (systemctl disable --now joya-session@<slug>).
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Root, HOME=/root, the default Claude config dir: the session registry every other
+# session on this box uses, so ListAgents lists it and SendMessage reaches it.
+User=root
+Group=root
+WorkingDirectory=/root
+Environment=HOME=/root
+Environment=NODE_NO_WARNINGS=1
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning /opt/joya-ai/bin/joya-session %i
+# SIGTERM to the runner alone: it closes claude's stdin so the transcript is written, then exits 0.
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=40
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=joya-session-%i
+
+[Install]
+WantedBy=multi-user.target

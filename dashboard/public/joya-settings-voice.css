@@ -1,0 +1,102 @@
+/*
+ * JOYA AI ▸ Settings ▸ Voice (lib/views-settings-voice.js): the few rules the
+ * section needs beyond joya-os.css (hero switch, voice cards with gender, the
+ * masked key, .voice-off / .dep / .dep-hide all live there).
+ */
+.set-sec .row.full .rc > .voice-form { flex: 1 1 auto; width: 100%; }
+.voice-form .voice-cards { flex: 1 1 auto; width: 100%; }
+.voice-card .top { width: 100%; }
+/* A voice card and its play button (voiceCard): the button sits beside the radio label, over its right edge. */
+.voice-slot { position: relative; display: flex; min-width: 0; }
+.voice-slot .voice-card { flex: 1 1 auto; min-width: 0; padding-right: 44px; }
+.voice-play { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--panel); color: var(--ink); cursor: pointer; }
+.voice-play:hover:not(:disabled) { border-color: var(--accent-2); color: var(--accent-2); }
+.voice-play:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.voice-play:disabled { opacity: .45; cursor: default; }
+.voice-play svg { display: block; }
+.voice-play .vp-i-stop { display: none; }
+.voice-play[data-state="playing"] { border-color: var(--accent-2); background: var(--accent-soft); color: var(--accent-2); }
+.voice-play[data-state="playing"] .vp-i-play { display: none; }
+.voice-play[data-state="playing"] .vp-i-stop { display: inline-flex; }
+.voice-play[data-state="loading"] { border-color: var(--line); border-top-color: var(--accent-2); animation: voice-play-spin .8s linear infinite; }
+.voice-play[data-state="loading"] .vp-i-play { opacity: .35; }
+@keyframes voice-play-spin { to { transform: translateY(-50%) rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .voice-play[data-state="loading"] { animation: none; border-style: dashed; } }
+.voice-sample-msg { margin: 8px 0 0; color: var(--bad); }
+.voice-play[hidden] { display: none; }
+.hero-sw .hs-form { flex: none; }
+.set-sec #v-main .row .rc select, .set-sec .dep-hide .row .rc select { width: min(360px, 100%); }
+.keybox .set-form.inline, .row .set-form.inline { display: inline-flex; }
+/* The voice model: the selector and the chosen model's facts under it. */
+.tr-pick { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; width: min(360px, 100%); }
+.tr-pick .set-form, .tr-pick select { width: 100%; }
+.tr-hint { color: var(--muted); font-size: 13px; line-height: 1.35; text-align: right; }
+@media (max-width: 640px) {
+  .set-sec #v-main .row .rc select, .set-sec .dep-hide .row .rc select { width: 100%; }
+  .row .rc > .set-form { width: 100%; }
+  .row .rc > .set-form.inline { width: auto; }
+  .tr-pick { width: 100%; align-items: stretch; }
+  .tr-hint { text-align: left; }
+}
+/* The Voiceprint group (lib/views-settings-voice.js voiceprintGroup). */
+.vp-off { opacity: .55; }
+.vp-off .rc { pointer-events: none; }
+.vp-warn { margin: 6px 0 10px; }
+.vp-enrol { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; width: min(420px, 100%); }
+.vp-mics { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; width: 100%; }
+.vp-mic { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.vp-mic .muted { font-size: 13px; }
+.vp-acts { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.vp-stats { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; width: 100%; }
+.vp-nums { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--body); min-width: 0; flex: 1 1 260px; }
+.vp-nums .muted { font-size: 13px; flex-basis: 100%; }
+.vp-attn b { color: var(--warn, var(--bad)); }
+.vp-hist { width: min(280px, 100%); height: auto; flex: 0 1 280px; }
+.vp-hist rect.ok { fill: var(--accent); }
+.vp-hist rect.mid { fill: var(--warn, #c9a227); }
+.vp-hist rect.bad { fill: var(--bad); }
+.vp-hist line.base { stroke: var(--line-strong, var(--line)); stroke-width: 1; }
+.vp-hist line.acc { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 3 2; }
+.vp-hist line.rej { stroke: var(--bad); stroke-width: 1; stroke-dasharray: 3 2; }
+.vp-hist text { fill: var(--muted); font-size: 13px; }
+@media (max-width: 640px) {
+  .vp-enrol { align-items: stretch; width: 100%; }
+  .vp-acts { justify-content: flex-start; }
+  .vp-hist { flex-basis: 100%; width: 100%; }
+}
+/* Strictness (voiceprintGroup): three presets as cards, then Advanced. */
+.vp-strict { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.vp-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.vp-preset { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); cursor: pointer; min-width: 0; }
+.vp-preset.on, .vp-preset:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.vp-preset input { margin-top: 3px; flex: none; }
+.vp-preset .t { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.vp-preset small { color: var(--muted); font-size: 13px; line-height: 1.35; }
+.vp-custom { grid-column: 1 / -1; margin: 0; color: var(--warn); }
+.vp-adv summary { cursor: pointer; font-size: 13px; color: var(--body); }
+.vp-nums-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
+.vp-num { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.vp-num input { width: 100%; max-width: 140px; }
+.vp-num small { font-size: 13px; }
+@media (max-width: 900px) { .vp-presets { grid-template-columns: 1fr; } .vp-nums-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .vp-nums-grid { grid-template-columns: 1fr; } .vp-num input { max-width: none; } }
+/* Stored voiceprints (voiceprintGroup personCard). */
+.vp-people-box { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.vp-people { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.vp-person { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.vp-person .vp-ph { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vp-person .vp-pn { overflow-wrap: anywhere; }
+.vp-person .vp-pc { justify-self: end; }
+.vp-person .vp-mics, .vp-person .vp-acts { grid-column: 1 / -1; }
+.vp-person .vp-acts { justify-content: flex-start; align-items: center; }
+.vp-cmd { display: inline-flex; align-items: center; gap: 8px; }
+.vp-rename { display: inline-block; }
+.vp-rename > summary { list-style: none; display: inline-flex; }
+.vp-rename > summary::-webkit-details-marker { display: none; }
+.vp-rename[open] { flex-basis: 100%; }
+.vp-rename-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 8px; }
+.vp-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+.vp-add .vp-field, .vp-rename-form .vp-field { flex: 1 1 160px; }
+.vp-add input[type=text], .vp-add input:not([type]), .vp-rename-form input { width: 100%; }
+.vp-me { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+@media (max-width: 640px) { .vp-person { grid-template-columns: 1fr; } .vp-person .vp-pc { justify-self: start; } }

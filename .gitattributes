@@ -1,0 +1,10 @@
+# Force LF everywhere. These files are deployed to Linux and a CRLF shebang
+# fails with a bare "No such file or directory", which is a miserable thing to
+# debug on a server at 2am.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.jpg binary
+
+# Patches for files kept with CRLF on the server: applied byte for byte.
+deploy/claude-memory-manage/*.patch -text

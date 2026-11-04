@@ -1,0 +1,81 @@
+[package]
+name = "joya-desktop"
+version = "0.1.14"
+description = "JOYA AI on the Windows desktop"
+authors = ["Joya"]
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+
+[lib]
+name = "joya_desktop_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "joya-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.8"
+url = "2"
+# Laptop control (machine/): the link to Joya (WebSocket over rustls, the Windows trust store) and the pairing POST.
+tungstenite = { version = "=0.29.0", features = ["rustls-tls-webpki-roots"] }
+rustls = { version = "=0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-platform-verifier = "=0.7.1"
+reqwest = { version = "=0.13.5", default-features = false, features = ["json", "rustls-no-provider"] }
+# Laptop control (hands/docs.rs): docx / xlsx / pptx are written as OOXML zips.
+zip = { version = "=4.6.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# Laptop control (hands/pdf.rs): read and merge PDFs in the app (nothing in a PDF is run).
+lopdf = { version = "=0.44.0", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+tauri-winrt-notification = "0.7"
+# Eye contact (lib.rs camera_profile / camera_once): the WebView2 profile's camera permission, the same crates wry uses.
+webview2-com = "0.39"
+windows-core = "0.62"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "bmp"] }
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_UI_Input_KeyboardAndMouse",
+  "Win32_UI_Shell",
+  "Win32_UI_HiDpi",
+  "Win32_Graphics_Gdi",
+  "Win32_Graphics_Dwm",
+  "Win32_System_Power",
+  "Win32_System_Com",
+  "Win32_System_SystemServices",
+  "Win32_System_StationsAndDesktops",
+  # real blur (acrylic.rs)
+  "Win32_System_LibraryLoader",
+  "Win32_System_Registry",
+  "Win32_UI_Accessibility",
+  "Win32_UI_Controls",
+  # Laptop control (machine/): the link token in Credential Manager, the CLI's process tree in a Job Object.
+  "Win32_Security",
+  "Win32_Security_Credentials",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+  # The Office apps a take-over started (hands/office_com.rs), closed when it ends.
+  "Win32_System_Diagnostics_ToolHelp",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

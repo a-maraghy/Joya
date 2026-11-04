@@ -1,0 +1,64 @@
+#!/usr/bin/env node
+"use strict";
+/**
+ * joya-ai-ctl: talk to the JOYA AI supervisor from a shell.
+ *
+ *   joya-ai-ctl status
+ *   joya-ai-ctl sessions
+ *   joya-ai-ctl send '{"text":"What is running right now?"}'
+ *   joya-ai-ctl approve '{"approval_id":3}'
+ *   joya-ai-ctl ledger '{"table":"delegations","limit":10}'
+ *   joya-ai-ctl events '{"since":0}'        (streams until Ctrl-C)
+ *   joya-ai-ctl session-hire '{"name":"Session Birth","cwd":"/root/joya","purpose":"..."}'
+ *   joya-ai-ctl fresh '{"reason":"context too large"}'
+ *                     (new conversation: stops the CLI, retires the session id,
+ *                      starts with a new one; refused while busy unless "force":true)
+ *
+ * Root or a member of the joyaai group. The actor recorded in the audit log is
+ * $JOYA_AI_ACTOR, else the invoking user ("cli:<user>").
+ */
+const net = require("net");
+const os = require("os");
+
+const SOCKET = process.env.JOYA_AI_SOCKET || "/run/joya-ai/joya-ai.sock";
+const [op, json] = process.argv.slice(2);
+if (!op || op === "-h" || op === "--help") {
+  console.log("usage: joya-ai-ctl <op> [json-params]\nops: ping status sessions rc-url events ledger send interrupt approve deny rc restart fresh\n     machine missions mission mission-create mission-step-add mission-step-update mission-update mission-request\n     decisions decision-propose decision-update decision-approve decision-dismiss decision-ask watchers watcher-set\n     orders order-runs order-create order-update order-delete order-run order-pause\n     rules rule-test rule-suggest rule-create rule-update rule-delete cost cost-budget session-mirror session-story story-day\n     hired session-hire session-retire session-keep\n(see lib/protocol.js for each op's params)");
+  process.exit(op ? 0 : 2);
+}
+let params = {};
+try {
+  params = json ? JSON.parse(json) : {};
+} catch (e) {
+  console.error("params must be JSON: " + e.message);
+  process.exit(2);
+}
+const who = (process.env.SUDO_USER || os.userInfo().username || "unknown").replace(/[^A-Za-z0-9._@-]/g, "");
+const actor = process.env.JOYA_AI_ACTOR || "cli." + who;
+const sock = net.createConnection(SOCKET);
+sock.setEncoding("utf8");
+sock.on("error", (e) => {
+  console.error(`cannot reach ${SOCKET}: ${e.message}`);
+  process.exit(1);
+});
+sock.on("connect", () => sock.write(JSON.stringify({ id: "ctl", op, actor, ...params }) + "\n"));
+let buf = "";
+sock.on("data", (c) => {
+  buf += c;
+  let nl;
+  while ((nl = buf.indexOf("\n")) !== -1) {
+    const line = buf.slice(0, nl);
+    buf = buf.slice(nl + 1);
+    const msg = JSON.parse(line);
+    if (msg.event) {
+      console.log(JSON.stringify(msg.event));
+      continue;
+    }
+    if (!msg.ok) {
+      console.error("error: " + msg.error);
+      process.exit(1);
+    }
+    console.log(JSON.stringify(msg.data, null, 2));
+    if (op !== "events") process.exit(0);
+  }
+});

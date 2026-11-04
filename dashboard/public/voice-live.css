@@ -1,0 +1,74 @@
+/*
+ * Live conversation in the Command Center's voice bar. The bar keeps the idle
+ * composer's exact shape and size (same box, padding, border, shadow; tested
+ * to 0 px): the round mic button stays where it is and becomes the end
+ * control -- a red circle with a white X ("End conversation"; Esc too) --
+ * the status text and the level wave sit where "Ask JOYA AI..." does, and the
+ * speakers / headphones switch and mute sit compact at the right, where the
+ * send arrow is. The push-to-talk mic, the route, the other tags and the bar's
+ * own close button are not shown during a call. Narrow screens drop the wave.
+ * Colours are the Joya brand tokens from style.css, so all three themes follow.
+ */
+.cc-live-only[hidden] { display: none !important; }
+.cc-dock.live-on #cc-vb-stop,
+.cc-dock.live-on .cc-vb-tags,
+.cc-dock.live-on .cc-voicebar .cc-static,
+.cc-dock.live-on #cc-vb-close,
+.cc-dock.live-on .cc-vb-text b { display: none; }
+.cc-dock.live-on .cc-vb-text { flex: 1 1 auto; min-width: 0; }
+.cc-dock.live-on .cc-vb-text span { font-size: 16px; line-height: 40px; }
+.cc-dock.live-on .cc-vb-wave { flex: 0 1 160px; min-width: 40px; }
+.cc-live-acts { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+/* The end control: the mic button's own box, red with a white X (one strong red in every theme: white on it reads at 5:1). */
+.cc-dock { --cc-end-red: #C8322B; }
+.cc-c-mic.cc-live-end { background: var(--cc-end-red); color: #fff; box-shadow: 0 6px 18px color-mix(in srgb, var(--cc-end-red) 35%, transparent); animation: cc-endpulse 2.4s ease-in-out infinite; }
+.cc-c-mic.cc-live-end .cc-i { width: 22px; height: 22px; stroke-width: 2.4; }
+.cc-c-mic.cc-live-end:hover { transform: none; filter: brightness(1.08); }
+.cc-c-mic.cc-live-end:focus-visible { outline: 2px solid var(--cc-end-red); outline-offset: 3px; }
+@keyframes cc-endpulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--cc-end-red) 18%, transparent), 0 6px 18px color-mix(in srgb, var(--cc-end-red) 35%, transparent); } }
+/* Speakers / headphones and mute: compact round icons at the right. */
+.cc-live-acts .cc-live-duplex { width: 40px; height: 40px; padding: 0; border-radius: 50%; display: inline-grid; place-items: center; border-color: transparent; background: transparent; }
+.cc-live-acts .cc-live-duplex .cc-i { width: 18px; height: 18px; }
+.cc-live-acts .cc-live-duplex:hover { background: var(--cc-glass-2, transparent); }
+.cc-live-duplex .lbl { display: none; }
+#cc-live-mute { width: 40px; height: 40px; }
+.cc-live-duplex[data-duplex="speakers"] .dx-hp,
+.cc-live-duplex[data-duplex="full"] .dx-sp { display: none; }
+.cc-dock.live-on[data-live="speaking"] .cc-vb-text { cursor: pointer; }
+.cc-live-suggest { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; max-width: min(520px, calc(100vw - 32px)); }
+/* Muted, clearly: the mute button filled amber with a slash, and the whole bar outlined. */
+#cc-live-mute[aria-pressed="true"] { position: relative; color: var(--warn); background: color-mix(in srgb, var(--warn) 16%, transparent); box-shadow: inset 0 0 0 2px var(--warn); }
+#cc-live-mute[aria-pressed="true"]::after { content: ""; position: absolute; left: 50%; top: 50%; width: 22px; height: 2px; margin: -1px 0 0 -11px; background: currentColor; transform: rotate(-45deg); border-radius: 1px; }
+.cc-dock[data-live="muted"] .cc-voicebar { box-shadow: inset 0 0 0 2px var(--warn); }
+
+/* The states, on the voice bar (data-live on #cc-dock). */
+.cc-dock[data-live="talking"] .cc-vb-text span,
+.cc-dock[data-live="speaking"] .cc-vb-text span { color: var(--accent); }
+.cc-dock[data-live="waiting"] .cc-vb-text span { color: var(--violet-ink); }
+.cc-dock[data-live="muted"] .cc-vb-text span { color: var(--warn); }
+.cc-dock[data-live="interrupted"] .cc-voicebar { animation: cc-live-flash .7s ease-out; }
+@keyframes cc-live-flash {
+  0% { box-shadow: 0 0 0 0 var(--glow); }
+  30% { box-shadow: 0 0 0 6px var(--accent-soft); }
+  100% { box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cc-dock[data-live="interrupted"] .cc-voicebar { animation: none; }
+  .cc-c-mic.cc-live-end { animation: none; }
+}
+
+/* Narrower: the wave goes. */
+@media (max-width: 1000px) {
+  .cc-dock.live-on .cc-vb-wave { display: none; }
+}
+
+
+/* The voice menu's third mode. */
+.cc-pop [data-vmode="live"] small b { color: var(--accent); font-weight: 600; }
+
+/* A screen action the voice took ("Joya opened Missions"), with Undo / Open. */
+.cc-ui-toast { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; max-width: min(520px, calc(100vw - 32px)); }
+
+/* A preference Joya asked to change (Tier 2): the question, Confirm / Cancel. */
+.cc-ui-confirm { border-color: var(--accent); }
+.cc-ui-confirm-hint { color: var(--muted); font-size: 11.5px; flex-basis: 100%; }

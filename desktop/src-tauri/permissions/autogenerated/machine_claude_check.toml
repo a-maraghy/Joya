@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-machine-claude-check"
+description = "Enables the machine_claude_check command without any pre-configured scope."
+commands.allow = ["machine_claude_check"]
+
+[[permission]]
+identifier = "deny-machine-claude-check"
+description = "Denies the machine_claude_check command without any pre-configured scope."
+commands.deny = ["machine_claude_check"]

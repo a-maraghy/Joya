@@ -1,0 +1,50 @@
+[Unit]
+Description=JOYA voiceprint: local speaker embeddings for the live voice (Unix socket only)
+Documentation=file:/opt/joya-voiceprint/server.py
+After=network.target
+
+# Installed and started by deploy/install-voiceprint.sh (run by
+# deploy/deploy-dashboard.sh). The dashboard (joyaadmin, a member of the
+# joyavoiceprint group) reaches it on /run/joya-voiceprint/voiceprint.sock; it
+# keeps no audio, no embedding and no voiceprint, and logs no request.
+# Whether the relay uses it at all is the panel's Settings > Voice > Voiceprint
+# switch: off, the relay never calls it.
+
+[Service]
+Type=simple
+User=joyavoiceprint
+Group=joyavoiceprint
+RuntimeDirectory=joya-voiceprint
+RuntimeDirectoryMode=0750
+Environment=JOYA_VOICEPRINT_SOCKET=/run/joya-voiceprint/voiceprint.sock
+Environment=JOYA_VOICEPRINT_MODEL=/var/lib/joya-voiceprint/models/voxceleb_resnet34_LM.onnx
+Environment=JOYA_VOICEPRINT_THREADS=4
+Environment=OMP_NUM_THREADS=4
+ExecStart=/opt/joya-voiceprint/venv/bin/python /opt/joya-voiceprint/server.py
+# A turn's check is ~20-60 ms of CPU; keep it ahead of batch work, behind nothing interactive.
+Nice=0
+CPUWeight=100
+MemoryMax=700M
+Restart=on-failure
+RestartSec=3
+
+WorkingDirectory=/tmp
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadOnlyPaths=/opt/joya-voiceprint /var/lib/joya-voiceprint
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+UMask=0007
+
+[Install]
+WantedBy=multi-user.target

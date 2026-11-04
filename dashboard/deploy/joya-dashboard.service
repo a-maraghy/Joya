@@ -1,0 +1,56 @@
+[Unit]
+Description=JOYA VPS admin dashboard
+Documentation=file:/home/ubuntu/workspace/SETUP.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=joyaadmin
+Group=joyaadmin
+WorkingDirectory=/opt/joya-dashboard
+ExecStart=/usr/bin/node /opt/joya-dashboard/server.js
+Restart=on-failure
+RestartSec=3
+
+Environment=NODE_ENV=production
+Environment=JOYA_BIND=127.0.0.1
+Environment=JOYA_PORT=3000
+Environment=JOYA_DATA_DIR=/var/lib/joya-dashboard
+Environment=JOYA_LOG_DIR=/var/log/joya-dashboard
+Environment=JOYA_PUBLIC_HOST=localhost
+Environment=JOYA_PUBLIC_PORT=8443
+# The app icon (lib/ui.js appIconSet): "bot" = JOYA AI's head with the cap (public/brand/bot/, since
+# desktop 0.1.9, 2026-10-20); unset or anything else = the Mesh icon.
+Environment=JOYA_APP_ICON=bot
+
+# --- sandboxing -------------------------------------------------------------
+# NOTE: NoNewPrivileges MUST stay false. The dashboard escalates through
+# `sudo joya-helper` for the few operations that need root; setting
+# NoNewPrivileges=yes would silently break every privileged action.
+NoNewPrivileges=false
+
+PrivateTmp=yes
+ProtectSystem=full
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=no
+LockPersonality=yes
+
+ReadWritePaths=/var/lib/joya-dashboard /var/log/joya-dashboard
+
+# ProtectSystem=full makes /etc read-only, and sudo's child inherits this
+# unit's mount namespace -- so without this, joya-helper cannot write the
+# per-agent systemd drop-ins even though it runs as root.
+#
+# This grants the namespace, not the service account: /etc/systemd/system is
+# 0755 root:root, so joyaadmin still cannot write a unit file. Only joya-helper,
+# which is root, can.
+ReadWritePaths=/etc/systemd/system
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=joya-dashboard
+
+[Install]
+WantedBy=multi-user.target

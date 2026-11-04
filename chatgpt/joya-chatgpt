@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# joya-chatgpt: look after the ChatGPT broker (joya-chatgpt.service).
+#
+#   joya-chatgpt status          is the service up, is ChatGPT signed in, what is running
+#   joya-chatgpt login           sign in again (device code; run as root)
+#   joya-chatgpt ask "<task>"    one task through the socket, like an agent would
+#   joya-chatgpt log [N]         the last N calls (default 20)
+#
+# The sign-in lives in /root/.codex only; nothing else holds a copy.
+set -euo pipefail
+CODEX_HOME_DIR=/root/.codex
+SOCK=/run/joya-chatgpt/sock
+MCP=/usr/local/lib/joya-chatgpt/chatgpt_mcp.py
+CALLS=/var/lib/joya-chatgpt/calls.jsonl
+
+cmd="${1:-status}"
+shift || true
+case "$cmd" in
+  status)
+    systemctl is-active --quiet joya-chatgpt && echo "service: running" || echo "service: NOT running"
+    if [[ -S $SOCK ]]; then
+      python3 - "$SOCK" <<'PY'
+import json, socket, sys
+s = socket.socket(socket.AF_UNIX); s.settimeout(40); s.connect(sys.argv[1])
+s.sendall(b'{"op":"status"}\n'); r = json.loads(s.makefile().readline())
+print("signed in:", "yes" if r.get("logged_in") else "NO -> run: joya-chatgpt login")
+print(f"running: {r.get('running')} of {r.get('max_running')}, queued: {r.get('queued')}, timeout: {r.get('timeout_s')} s")
+PY
+    fi ;;
+  login)
+    [[ $EUID -eq 0 ]] || { echo "run as root" >&2; exit 1; }
+    CODEX_HOME=$CODEX_HOME_DIR codex login --device-auth
+    CODEX_HOME=$CODEX_HOME_DIR codex login status ;;
+  ask)
+    [[ $# -ge 1 ]] || { echo 'usage: joya-chatgpt ask "<task>"' >&2; exit 2; }
+    TASK="$1" python3 - "$MCP" <<'PY'
+import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("m", sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+os.environ.setdefault("JOYA_CHATGPT_CALLER", "cli:" + os.environ.get("SUDO_USER", os.environ.get("USER", "root")))
+text, err = m.ask({"task": os.environ["TASK"]})
+print(text); sys.exit(1 if err else 0)
+PY
+    ;;
+  log)
+    tail -n "${1:-20}" "$CALLS" 2>/dev/null || echo "no calls yet" ;;
+  *) sed -n '3,10p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
