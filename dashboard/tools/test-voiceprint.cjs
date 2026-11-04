@@ -79,10 +79,10 @@ async function until(fn, ms) {
 
 const DIM = 64;
 const e = (i) => Array.from({ length: DIM }, (_, k) => (k === i ? 1 : 0));
-const U = e(0); // the administrator (AbdElMoniem)
+const U = e(0); // the administrator (Sara)
 const O = e(1); // someone unknown
 const T = e(2); // JOYA AI's TTS voice
-const Z = e(3); // another stored person (Zaghloul)
+const Z = e(3); // another stored person (Omar)
 const TIE = vpLib.unit(U.map((x, k) => x + Z[k])); // 0.707 to both: too close to name
 const M = vpLib.unit(U.map((x, k) => 0.25 * x + 0.968 * O[k])); // unsure: 0.25 against U
 const OVER = vpLib.unit(T.map((x, k) => 0.8 * x + 0.1 * U[k])); // JOYA AI's voice leaking back: close to T, ~0.12 to U
@@ -107,7 +107,7 @@ function startFakeService(sock) {
     req.on("end", async () => {
       const body = Buffer.concat(parts);
       const who0 = speakerOf(body);
-      svc.calls.push({ path: req.url, bytes: body.length, who: who0 === U ? "user" : who0 === Z ? "zaghloul" : who0 === O ? "other" : who0 === M ? "unsure" : who0 ? "tts" : "silence" });
+      svc.calls.push({ path: req.url, bytes: body.length, who: who0 === U ? "user" : who0 === Z ? "omar" : who0 === O ? "other" : who0 === M ? "unsure" : who0 ? "tts" : "silence" });
       if (svc.delay) await sleep(svc.delay);
       if (svc.mode === "broken") return res.writeHead(500, { "Content-Type": "application/json" }), res.end(JSON.stringify({ ok: false, error: "boom" }));
       if (svc.mode === "nonsense") return res.writeHead(200), res.end("not json");
@@ -183,7 +183,7 @@ function decideTests() {
   check("short (< 0.8 s): the call's speaker if they fit, else unverified (unnamed); clearly unknown still reject", D([A(0.25)], { speechMs: 500, current: "pA" }).verdict === "sticky" && D([A(0.25)], { speechMs: 500 }).verdict === "unverified" && D([A(0.1)], { speechMs: 500 }).verdict === "reject");
   check("JOYA AI's own voice over its playback: echo", D([A(0.3)], { overVoice: true, tts: 0.8 }).verdict === "echo" && D([A(0.3)], { overVoice: false, tts: 0.8 }).verdict !== "echo");
   check("nothing stored: none", D([]).verdict === "none");
-  check("names: Latin display names, Arabic spoken names", vpLib.cleanName("AbdElMoniem").ok && vpLib.cleanName("Zaghloul").ok && !vpLib.cleanName("").ok && !vpLib.cleanName("<b>x</b>").ok && !vpLib.cleanName("زغلول").ok && vpLib.cleanSpoken("زغلول").ok && vpLib.cleanSpoken("عبد المنعم").ok && !vpLib.cleanSpoken("a\u0000b").ok);
+  check("names: Latin display names, Arabic spoken names", vpLib.cleanName("Sara").ok && vpLib.cleanName("Omar").ok && !vpLib.cleanName("").ok && !vpLib.cleanName("<b>x</b>").ok && !vpLib.cleanName("عمر").ok && vpLib.cleanSpoken("عمر").ok && vpLib.cleanSpoken("سارة").ok && !vpLib.cleanSpoken("a\u0000b").ok);
 }
 
 async function library(sock) {
@@ -191,20 +191,20 @@ async function library(sock) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vp-lib-"));
   const priv = fakePriv(dir);
   const logs = [];
-  const users = { 1: { id: 1, username: "amaraghy", display_name: "amaraghy" }, 7: { id: 7, username: "guest7", display_name: "Guest Seven" } };
+  const users = { 1: { id: 1, username: "sara", display_name: "sara" }, 7: { id: 7, username: "guest7", display_name: "Guest Seven" } };
   // A print from before names: DATA_DIR/voiceprint/1.json, sealed (the migration's input).
   fs.mkdirSync(path.join(dir, "voiceprint"), { recursive: true, mode: 0o700 });
   const oldSealed = (await priv.voiceprintSeal(Buffer.from(JSON.stringify({ v: 1, mics: { laptop: { sum: U.map((x) => x * 19), windows: 19 } } })).toString("base64"))).sealed;
   fs.writeFileSync(path.join(dir, "voiceprint", "1.json"), JSON.stringify({ v: 1, sealed: oldSealed, created_at: "2026-10-07T19:31:55.257Z", mics: { laptop: { windows: 19, speech_s: 50.2, source: "trial" } } }), { mode: 0o600 });
-  const mk = () => vpLib.createVoiceprint({ db, priv, dataDir: dir, socketPath: sock, log: (m) => logs.push(m), userById: (id) => users[id] || null });
+  const mk = () => vpLib.createVoiceprint({ migrateNames: { sara: { name: "Sara", spoken: "سارة" } }, db, priv, dataDir: dir, socketPath: sock, log: (m) => logs.push(m), userById: (id) => users[id] || null });
   const vp = mk();
   const ps = vp.people();
-  check("migration: the old print becomes “AbdElMoniem” («عبد المنعم»), linked to amaraghy, may give commands, its microphones kept", ps.length === 1 && ps[0].name === "AbdElMoniem" && ps[0].spoken === "عبد المنعم" && ps[0].user_id === 1 && ps[0].may_command === true && ps[0].mics.laptop.speech_s === 50.2 && ps[0].enrolled, JSON.stringify(ps));
+  check("migration: the old print becomes “Sara” («سارة»), linked to sara, may give commands, its microphones kept", ps.length === 1 && ps[0].name === "Sara" && ps[0].spoken === "سارة" && ps[0].user_id === 1 && ps[0].may_command === true && ps[0].mics.laptop.speech_s === 50.2 && ps[0].enrolled, JSON.stringify(ps));
   check("  the old file is gone; people.json is 0600 and holds the sealed blob, no numbers in clear", !fs.existsSync(path.join(dir, "voiceprint", "1.json")) && (fs.statSync(path.join(dir, "voiceprint", "people.json")).mode & 0o777) === 0o600 && !/"sum"/.test(fs.readFileSync(path.join(dir, "voiceprint", "people.json"), "utf8")));
   await vp.openAll();
   check("  and it opens through the helper", vp.hasPrints() && priv.calls.open === 1);
   const A = ps[0];
-  const me = { id: 1, username: "amaraghy" };
+  const me = { id: 1, username: "sara" };
   check("  personForUser finds it", vp.personForUser(me).id === A.id);
 
   const bad = (fn) => {
@@ -215,29 +215,29 @@ async function library(sock) {
       return x;
     }
   };
-  check("add: a bad name, a duplicate and a second print for the same user are refused", /Latin letters/.test((bad(() => vp.addPerson({ name: "زغلول" })) || {}).message) && /already a voiceprint called/.test((bad(() => vp.addPerson({ name: "abdelmoniem" })) || {}).message) && /already has a voiceprint/.test((bad(() => vp.addPerson({ name: "Other", user_id: 1 })) || {}).message));
-  const Zp = vp.addPerson({ name: "Zaghloul", spoken: "زغلول" });
-  check("add Zaghloul: not linked, may NOT give commands by default", Zp.name === "Zaghloul" && Zp.spoken === "زغلول" && Zp.user_id === null && Zp.may_command === false && !Zp.enrolled);
+  check("add: a bad name, a duplicate and a second print for the same user are refused", /Latin letters/.test((bad(() => vp.addPerson({ name: "عمر" })) || {}).message) && /already a voiceprint called/.test((bad(() => vp.addPerson({ name: "sara" })) || {}).message) && /already has a voiceprint/.test((bad(() => vp.addPerson({ name: "Other", user_id: 1 })) || {}).message));
+  const Zp = vp.addPerson({ name: "Omar", spoken: "عمر" });
+  check("add Omar: not linked, may NOT give commands by default", Zp.name === "Omar" && Zp.spoken === "عمر" && Zp.user_id === null && Zp.may_command === false && !Zp.enrolled);
   for (const id of ["e1", "e2", "e3"]) await vp.enrolClip(Zp.id, "laptop", id, tone(1250, 12000, 16000), 16000);
   const zs = await vp.enrolSave(Zp.id, "laptop");
-  check("enrol Zaghloul (36 s)", zs.name === "Zaghloul" && vp.person(Zp.id).enrolled);
+  check("enrol Omar (36 s)", zs.name === "Omar" && vp.person(Zp.id).enrolled);
 
   const c1 = await vp.check(tone(1000, 1500), {});
   const c2 = await vp.check(tone(1250, 1500), {});
   const c3 = await vp.check(tone(1500, 1500), {});
   const c4 = await vp.check(tone(2000, 1500), {});
   const c5 = await vp.check(tone(2500, 1500), { current: { id: A.id, at: Date.now() } });
-  check("1-vs-N: AbdElMoniem and Zaghloul named; too close: not sure; unknown: reject; doubtful in AbdElMoniem's call: him", c1.verdict === "accept" && c1.speaker.name === "AbdElMoniem" && c2.verdict === "accept" && c2.speaker.name === "Zaghloul" && c2.speaker.may_command === false && c3.verdict === "uncertain" && !c3.speaker && c4.verdict === "reject" && c5.verdict === "sticky" && c5.speaker.name === "AbdElMoniem", JSON.stringify([c1, c2, c3, c4, c5].map((x) => [x.verdict, x.speaker && x.speaker.name])));
+  check("1-vs-N: Sara and Omar named; too close: not sure; unknown: reject; doubtful in Sara's call: him", c1.verdict === "accept" && c1.speaker.name === "Sara" && c2.verdict === "accept" && c2.speaker.name === "Omar" && c2.speaker.may_command === false && c3.verdict === "uncertain" && !c3.speaker && c4.verdict === "reject" && c5.verdict === "sticky" && c5.speaker.name === "Sara", JSON.stringify([c1, c2, c3, c4, c5].map((x) => [x.verdict, x.speaker && x.speaker.name])));
   check("  the service was asked for the turn's first 3 s at 24 kHz", svc.calls.some((x) => /\/embed\?rate=24000&first=3/.test(x.path)));
   check("  last heard is kept", !!vp.person(A.id).last_heard);
 
-  vp.updatePerson(Zp.id, { may_command: true, spoken: "زغلول باشا" });
-  check("update: may give commands, spoken name", vp.person(Zp.id).may_command === true && vp.person(Zp.id).spoken === "زغلول باشا" && (await vp.check(tone(1250, 1500), {})).speaker.may_command === true);
-  check("  rename to a taken name refused", /already a voiceprint called/.test((bad(() => vp.updatePerson(Zp.id, { name: "AbdElMoniem" })) || {}).message));
+  vp.updatePerson(Zp.id, { may_command: true, spoken: "عمر باشا" });
+  check("update: may give commands, spoken name", vp.person(Zp.id).may_command === true && vp.person(Zp.id).spoken === "عمر باشا" && (await vp.check(tone(1250, 1500), {})).speaker.may_command === true);
+  check("  rename to a taken name refused", /already a voiceprint called/.test((bad(() => vp.updatePerson(Zp.id, { name: "Sara" })) || {}).message));
 
   const vp2 = mk();
   await vp2.openAll();
-  check("a new process opens every stored print", vp2.hasPrints() && vp2.people().length === 2 && (await vp2.check(tone(1250, 1500), {})).speaker.name === "Zaghloul");
+  check("a new process opens every stored print", vp2.hasPrints() && vp2.people().length === 2 && (await vp2.check(tone(1250, 1500), {})).speaker.name === "Omar");
 
   check("JOYA AI's voice: learned from what was played, then not again within a minute", (await vp2.learnTts("marin", tone(3000, 2000))) === true && (await vp2.learnTts("marin", tone(3000, 2000))) === false && !!vp2.ttsPrint("marin"));
   const ec = await vp2.check(tone(4000, 1500), { overVoice: true, voice: "marin" });
@@ -255,15 +255,15 @@ async function library(sock) {
   check("  and a good answer clears it", (await vp2.check(tone(1000, 1500), {})).verdict === "accept" && vp2.status(me).service.error === null);
 
   db.voiceprintChecksDeleteAll();
-  for (const [v, sid, sn] of [["accept", A.id, "AbdElMoniem"], ["accept", A.id, "AbdElMoniem"], ["sticky", Zp.id, "Zaghloul"], ["reject", null, null], ["uncertain", null, null]]) vp2.ledger({ actor: "vpuser", call_id: "lvx", turn: 1, mode: "vad", verdict: v, score: 0.5, ms: 20, acted: sn === "Zaghloul" ? "shadow, talk only" : "shadow", speaker_id: sid, speaker: sn });
+  for (const [v, sid, sn] of [["accept", A.id, "Sara"], ["accept", A.id, "Sara"], ["sticky", Zp.id, "Omar"], ["reject", null, null], ["uncertain", null, null]]) vp2.ledger({ actor: "vpuser", call_id: "lvx", turn: 1, mode: "vad", verdict: v, score: 0.5, ms: 20, acted: sn === "Omar" ? "shadow, talk only" : "shadow", speaker_id: sid, speaker: sn });
   const st = vp2.stats(7);
-  check("7 days per person: turns, talk only; unknown and unsure", st.checked === 5 && st.people.map((x) => x.name + ":" + x.turns).join() === "AbdElMoniem:2,Zaghloul:1" && st.people[1].talk_only === 1 && st.unknown === 1 && st.unsure === 1, JSON.stringify(st.people));
+  check("7 days per person: turns, talk only; unknown and unsure", st.checked === 5 && st.people.map((x) => x.name + ":" + x.turns).join() === "Sara:2,Omar:1" && st.people[1].talk_only === 1 && st.unknown === 1 && st.unsure === 1, JSON.stringify(st.people));
 
   await vp2.enrolClip(Zp.id, "headset", "e1", tone(1250, 40000, 16000), 16000);
   await vp2.enrolSave(Zp.id, "headset");
-  check("a second microphone for Zaghloul; removing it keeps the first", Object.keys(vp2.person(Zp.id).mics).join() === "laptop,headset" && (await vp2.removeMic(Zp.id, "headset")) && Object.keys(vp2.person(Zp.id).mics).join() === "laptop");
+  check("a second microphone for Omar; removing it keeps the first", Object.keys(vp2.person(Zp.id).mics).join() === "laptop,headset" && (await vp2.removeMic(Zp.id, "headset")) && Object.keys(vp2.person(Zp.id).mics).join() === "laptop");
   await vp2.removePerson(Zp.id);
-  check("delete one person: only theirs", vp2.people().map((x) => x.name).join() === "AbdElMoniem" && (await vp2.check(tone(1250, 1500), {})).verdict !== "accept");
+  check("delete one person: only theirs", vp2.people().map((x) => x.name).join() === "Sara" && (await vp2.check(tone(1250, 1500), {})).verdict !== "accept");
   for (let i = 0; i < 9; i++) vp2.addPerson({ name: "Guest " + i });
   check("at most 10 stored voiceprints", /At most 10/.test((bad(() => vp2.addPerson({ name: "Eleven" })) || {}).message));
   const fa = await vp2.forgetAll();
@@ -355,10 +355,10 @@ async function relay(sock) {
   const priv = fakePriv(dir);
   const vp = vpLib.createVoiceprint({ db, priv, dataDir: dir, socketPath: sock, log: () => {}, userById: () => null });
   const me = { id: 51, username: "relayuser" };
-  const A = vp.addPerson({ name: "AbdElMoniem", spoken: "عبد المنعم", user_id: 51, may_command: true });
+  const A = vp.addPerson({ name: "Sara", spoken: "سارة", user_id: 51, may_command: true });
   for (const id of ["e1", "e2", "e3", "e4"]) await vp.enrolClip(A.id, "laptop", id, tone(1000, 10000, 16000), 16000);
   await vp.enrolSave(A.id, "laptop");
-  const Zp = vp.addPerson({ name: "Zaghloul", spoken: "زغلول" });
+  const Zp = vp.addPerson({ name: "Omar", spoken: "عمر" });
   for (const id of ["e1", "e2", "e3", "e4"]) await vp.enrolClip(Zp.id, "laptop", id, tone(1250, 10000, 16000), 16000);
   await vp.enrolSave(Zp.id, "laptop");
   db.voiceprintChecksDelete("relayuser");
@@ -392,8 +392,8 @@ async function relay(sock) {
     check("SHADOW: every turn checked and logged (the unsure one after a recognised turn is the call's voice)", rows.length === 3 && rows.map((r) => r.verdict).join() === "accept,reject,sticky" && rows.every((r) => r.acted === "shadow" && !r.gated), JSON.stringify(rows.map((r) => [r.verdict, r.acted])));
     check("  nothing blocked: all three answered", created(s) === 3);
     const ev = client.json.filter((m) => m.type === "voiceprint");
-    check("  the page's pill is told each verdict, as 'would' (gated false), never a score", ev.map((m) => m.kind).join() === "known,other,known" && ev[0].name === "AbdElMoniem" && ev.every((m) => m.gated === false && !("score" in m) && !("tts_score" in m)), JSON.stringify(ev));
-    check("  the log names the verdict and score per turn, nothing else of the voice", logs.some((l) => /turn \d+ voiceprint: accept, AbdElMoniem \(new speaker\), 1\.000/.test(l)) && logs.some((l) => /voiceprint: reject, unknown voice, 0\.000.*\(shadow\)/.test(l)), logs.filter((l) => /voiceprint/.test(l)).join("\n"));
+    check("  the page's pill is told each verdict, as 'would' (gated false), never a score", ev.map((m) => m.kind).join() === "known,other,known" && ev[0].name === "Sara" && ev.every((m) => m.gated === false && !("score" in m) && !("tts_score" in m)), JSON.stringify(ev));
+    check("  the log names the verdict and score per turn, nothing else of the voice", logs.some((l) => /turn \d+ voiceprint: accept, Sara \(new speaker\), 1\.000/.test(l)) && logs.some((l) => /voiceprint: reject, unknown voice, 0\.000.*\(shadow\)/.test(l)), logs.filter((l) => /voiceprint/.test(l)).join("\n"));
     c.close("test");
   }
 
@@ -574,7 +574,7 @@ async function relay(sock) {
     // JOYA AI's voice is learned from what it plays, only while the voiceprint is on
     const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), "vp-learn-"));
     const vp3 = vpLib.createVoiceprint({ db, priv: fakePriv(dir2), dataDir: dir2, socketPath: sock, log: () => {} });
-    const A3 = vp3.addPerson({ name: "AbdElMoniem", user_id: 51, may_command: true });
+    const A3 = vp3.addPerson({ name: "Sara", user_id: 51, may_command: true });
     await vp3.enrolClip(A3.id, "laptop", "e1", tone(1000, 40000, 16000), 16000);
     await vp3.enrolSave(A3.id, "laptop");
     vp3.setGate(false, "test");
@@ -615,25 +615,25 @@ async function namesTests(sock, vp, me, A, Zp) {
     const g = gate ? "GATE" : "SHADOW";
     await turn(s, c, 1000, "hello");
     let n = notes(s);
-    check(`${g} A: the first recognised turn: one note to address AbdElMoniem by name («عبد المنعم»)`, n.length === 1 && /recognised as "AbdElMoniem" \(in Arabic: «عبد المنعم»\)/.test(n[0]) && /addressing them by that name, once/.test(n[0]) && !/different person/.test(n[0]) && !/may not give commands/.test(n[0]), JSON.stringify(n));
+    check(`${g} A: the first recognised turn: one note to address Sara by name («سارة»)`, n.length === 1 && /recognised as "Sara" \(in Arabic: «سارة»\)/.test(n[0]) && /addressing them by that name, once/.test(n[0]) && !/different person/.test(n[0]) && !/may not give commands/.test(n[0]), JSON.stringify(n));
     await turn(s, c, 1000, "and the memory?");
     check(`${g}   A again: no new note (the name is said once, not every turn)`, notes(s).length === 1);
     await turn(s, c, 1250, "ازيك يا جويا");
     n = notes(s);
-    check(`${g} B: Zaghloul speaks: a note with his name, a different person, talk only`, n.length === 2 && /recognised as "Zaghloul" \(in Arabic: «زغلول»\), a different person/.test(n[1]) && /Zaghloul may talk with you but may not give commands/.test(n[1]), JSON.stringify(n));
+    check(`${g} B: Omar speaks: a note with his name, a different person, talk only`, n.length === 2 && /recognised as "Omar" \(in Arabic: «عمر»\), a different person/.test(n[1]) && /Omar may talk with you but may not give commands/.test(n[1]), JSON.stringify(n));
     await turn(s, c, 1250, "and the weather?");
     n = notes(s);
     check(`${g}   B again: only the talk-only reminder, no name`, n.length === 3 && !/recognised as/.test(n[2]) && /may not give commands/.test(n[2]), JSON.stringify(n.slice(2)));
     await turn(s, c, 1000, "it's me again");
     n = notes(s);
-    check(`${g} A: back to AbdElMoniem: his name again, may give commands`, n.length === 4 && /recognised as "AbdElMoniem"/.test(n[3]) && !/may not give commands/.test(n[3]), JSON.stringify(n.slice(3)));
+    check(`${g} A: back to Sara: his name again, may give commands`, n.length === 4 && /recognised as "Sara"/.test(n[3]) && !/may not give commands/.test(n[3]), JSON.stringify(n.slice(3)));
     check(`${g}   all five turns answered`, created(s) === 5, created(s));
     const ev = client.json.filter((m) => m.type === "voiceprint");
-    check(`${g}   the pill: names, talk only for Zaghloul, gated=${gate}`, ev.map((m) => m.name + (m.talkOnly ? "*" : "")).join() === "AbdElMoniem,AbdElMoniem,Zaghloul*,Zaghloul*,AbdElMoniem" && ev.every((m) => m.kind === "known" && m.gated === gate && !("score" in m)), JSON.stringify(ev));
+    check(`${g}   the pill: names, talk only for Omar, gated=${gate}`, ev.map((m) => m.name + (m.talkOnly ? "*" : "")).join() === "Sara,Sara,Omar*,Omar*,Sara" && ev.every((m) => m.kind === "known" && m.gated === gate && !("score" in m)), JSON.stringify(ev));
     const rows = db.voiceprintChecksSince(0, "relayuser");
-    check(`${g}   the ledger records who spoke`, rows.map((r) => r.speaker).join() === "AbdElMoniem,AbdElMoniem,Zaghloul,Zaghloul,AbdElMoniem" && rows[2].speaker_id === Zp.id && /talk only/.test(rows[2].acted) && !/talk only/.test(rows[0].acted), JSON.stringify(rows.map((r) => [r.speaker, r.acted])));
+    check(`${g}   the ledger records who spoke`, rows.map((r) => r.speaker).join() === "Sara,Sara,Omar,Omar,Sara" && rows[2].speaker_id === Zp.id && /talk only/.test(rows[2].acted) && !/talk only/.test(rows[0].acted), JSON.stringify(rows.map((r) => [r.speaker, r.acted])));
     c.close("test");
-    check(`${g}   the call's log line: the sequence of speakers`, logs.some((l) => /speakers: AbdElMoniem → Zaghloul → AbdElMoniem$/.test(l)), logs.filter((l) => /speakers/.test(l)).join("\n"));
+    check(`${g}   the call's log line: the sequence of speakers`, logs.some((l) => /speakers: Sara → Omar → Sara$/.test(l)), logs.filter((l) => /speakers/.test(l)).join("\n"));
   }
 
   // the gate: an unknown voice between them, and a voice too close to both
@@ -648,13 +648,13 @@ async function namesTests(sock, vp, me, A, Zp) {
     const o = await turn(s, c, 2000, "who are you?");
     check("  an unknown voice: not answered", created(s) === 1 && deleted(s, o), created(s));
     await turn(s, c, 1500, "hmm");
-    check("  the too-close voice once AbdElMoniem is the call's speaker: him (no new name note)", created(s) === 2 && notes(s).length === 1, created(s) + " " + notes(s).length);
+    check("  the too-close voice once Sara is the call's speaker: him (no new name note)", created(s) === 2 && notes(s).length === 1, created(s) + " " + notes(s).length);
     const ev = client.json.filter((m) => m.type === "voiceprint").map((m) => m.kind + (m.name ? ":" + m.name : ""));
-    check("  the pill: unsure, AbdElMoniem, unknown voice, AbdElMoniem", ev.join() === "unsure,known:AbdElMoniem,other,known:AbdElMoniem", ev.join());
+    check("  the pill: unsure, Sara, unknown voice, Sara", ev.join() === "unsure,known:Sara,other,known:Sara", ev.join());
     c.close("test");
   }
 
-  // talk only: what Zaghloul may and may not do
+  // talk only: what Omar may and may not do
   vp.setGate(false, "test");
   {
     const dbg = relayCall(vp, me, { confirm: true });
@@ -662,19 +662,19 @@ async function namesTests(sock, vp, me, A, Zp) {
     await c.open();
     const s = mock.sessions[mock.sessions.length - 1];
     await turn(s, c, 1250, "yes");
-    check("TALK ONLY: Zaghloul's “yes” confirms nothing", heardConfirm.length === 0 && !client.json.some((m) => m.type === "ui-confirmed"));
-    const fake = { turn: { n: 1, talkOnly: true, talkOnlyName: "Zaghloul" } };
+    check("TALK ONLY: Omar's “yes” confirms nothing", heardConfirm.length === 0 && !client.json.some((m) => m.type === "ui-confirmed"));
+    const fake = { turn: { n: 1, talkOnly: true, talkOnlyName: "Omar" } };
     const r1 = await c.runTool({ name: "look_into", arguments: JSON.stringify({ text: "restart odoo" }) }, fake);
     const r2 = await c.runTool({ name: "ui_action", arguments: JSON.stringify({ action: "open", target: "agents" }) }, fake);
-    check("  look_into and ui_action are refused for him (conversational only)", /refused: Zaghloul may talk with you but may not give commands/.test(r1) && /refused: Zaghloul/.test(r2), r1 + " | " + r2);
-    check("  and logged", dbg.logs.some((l) => /refused look_into: Zaghloul may not give commands/.test(l)));
+    check("  look_into and ui_action are refused for him (conversational only)", /refused: Omar may talk with you but may not give commands/.test(r1) && /refused: Omar/.test(r2), r1 + " | " + r2);
+    check("  and logged", dbg.logs.some((l) => /refused look_into: Omar may not give commands/.test(l)));
     let asked = null;
     c.d.ops = { ...c.d.ops, ask: async (req) => ((asked = req), { turn: { id: "t1", status: "queued" } }) };
-    const p = await c.passOn({ n: 1, talkOnly: true, talkOnlyName: "Zaghloul" }, "restart odoo");
-    check("  no hand-off to JOYA AI for him", p === null && asked === null && dbg.logs.some((l) => /not passed to JOYA AI: Zaghloul may not give commands/.test(l)), JSON.stringify(p));
+    const p = await c.passOn({ n: 1, talkOnly: true, talkOnlyName: "Omar" }, "restart odoo");
+    check("  no hand-off to JOYA AI for him", p === null && asked === null && dbg.logs.some((l) => /not passed to JOYA AI: Omar may not give commands/.test(l)), JSON.stringify(p));
     void spoke;
-    await c.passOn({ n: 2, speaker: { name: "AbdElMoniem" } }, "restart odoo");
-    check("HAND-OFF: AbdElMoniem's request reaches JOYA AI as “[speaker: AbdElMoniem] …”", asked === "[speaker: AbdElMoniem] restart odoo", JSON.stringify(asked));
+    await c.passOn({ n: 2, speaker: { name: "Sara" } }, "restart odoo");
+    check("HAND-OFF: Sara's request reaches JOYA AI as “[speaker: Sara] …”", asked === "[speaker: Sara] restart odoo", JSON.stringify(asked));
     c.close("test");
   }
   vp.setGate(false, "test");
@@ -797,23 +797,23 @@ async function routes(sock) {
 
     // add a person: a plain form, the browser follows the 303 to their enrolment page
     const plain = (p, body) => s.req("POST", p, { cookie: ad.cookie, body: new URLSearchParams({ _csrf: csrf, ...(body || {}) }).toString() });
-    r = await plain("/joya-ai/settings/voice/voiceprint/people", { name: "Zaghloul", spoken: "زغلول" });
-    const zid = (peopleJson().people.find((x) => x.name === "Zaghloul") || {}).id;
-    check("add Zaghloul («زغلول»): 303 to his enrolment page; not linked, may NOT give commands; audited", r.status === 303 && r.headers.location === "/joya-ai/voiceprint/enrol?person=" + zid && peopleJson().people.find((x) => x.id === zid).may_command === false && peopleJson().people.find((x) => x.id === zid).user_id === null && db.recentLogins(10).some((x) => /voiceprint: added Zaghloul, may give commands off/.test(x.detail || "")), r.status + " " + JSON.stringify(r.headers.location));
-    r = await post("/joya-ai/settings/voice/voiceprint/people", { name: "zaghloul" });
+    r = await plain("/joya-ai/settings/voice/voiceprint/people", { name: "Omar", spoken: "عمر" });
+    const zid = (peopleJson().people.find((x) => x.name === "Omar") || {}).id;
+    check("add Omar («عمر»): 303 to his enrolment page; not linked, may NOT give commands; audited", r.status === 303 && r.headers.location === "/joya-ai/voiceprint/enrol?person=" + zid && peopleJson().people.find((x) => x.id === zid).may_command === false && peopleJson().people.find((x) => x.id === zid).user_id === null && db.recentLogins(10).some((x) => /voiceprint: added Omar, may give commands off/.test(x.detail || "")), r.status + " " + JSON.stringify(r.headers.location));
+    r = await post("/joya-ai/settings/voice/voiceprint/people", { name: "omar" });
     check("  a duplicate name is refused", r.status === 400 && /already a voiceprint called/.test(r.body), r.body);
     r = await post("/joya-ai/settings/voice/voiceprint/people", { name: "<script>" });
     check("  a bad name is refused", r.status === 400 && /Latin letters/.test(r.body), r.body);
     check("  without voice.manage or CSRF: refused", (await post("/joya-ai/settings/voice/voiceprint/people", { name: "Eve" }, op)).status === 403 && (await s.req("POST", "/joya-ai/settings/voice/voiceprint/people", { cookie: ad.cookie, body: "name=Eve", headers: { Accept: "application/json" } })).status === 403 && peopleJson().people.length === 2);
     pg = await page();
-    check("  Zaghloul is listed: spoken name, not enrolled, may give commands off", new RegExp(`data-person="${zid}"`).test(pg.body) && /«زغلول»/.test(pg.body) && /not enrolled/.test(pg.body));
+    check("  Omar is listed: spoken name, not enrolled, may give commands off", new RegExp(`data-person="${zid}"`).test(pg.body) && /«عمر»/.test(pg.body) && /not enrolled/.test(pg.body));
     r = await post(`/joya-ai/settings/voice/voiceprint/people/${zid}/command`, { may: "1" });
-    check("May give commands: on, audited", r.status === 200 && peopleJson().people.find((x) => x.id === zid).may_command === true && db.recentLogins(10).some((x) => /Zaghloul may give commands on/.test(x.detail || "")));
+    check("May give commands: on, audited", r.status === 200 && peopleJson().people.find((x) => x.id === zid).may_command === true && db.recentLogins(10).some((x) => /Omar may give commands on/.test(x.detail || "")));
     r = await post(`/joya-ai/settings/voice/voiceprint/people/${zid}/command`, {});
     check("  and off again", r.status === 200 && peopleJson().people.find((x) => x.id === zid).may_command === false);
-    r = await post(`/joya-ai/settings/voice/voiceprint/people/${zid}/rename`, { name: "Zaghloul B", spoken: "زغلول" });
-    check("rename, audited", r.status === 200 && peopleJson().people.find((x) => x.id === zid).name === "Zaghloul B" && db.recentLogins(10).some((x) => /renamed Zaghloul to Zaghloul B/.test(x.detail || "")), r.body);
-    await post(`/joya-ai/settings/voice/voiceprint/people/${zid}/rename`, { name: "Zaghloul", spoken: "زغلول" });
+    r = await post(`/joya-ai/settings/voice/voiceprint/people/${zid}/rename`, { name: "Omar B", spoken: "عمر" });
+    check("rename, audited", r.status === 200 && peopleJson().people.find((x) => x.id === zid).name === "Omar B" && db.recentLogins(10).some((x) => /renamed Omar to Omar B/.test(x.detail || "")), r.body);
+    await post(`/joya-ai/settings/voice/voiceprint/people/${zid}/rename`, { name: "Omar", spoken: "عمر" });
     check("  an unknown id: refused", (await post("/joya-ai/settings/voice/voiceprint/people/pdeadbeef/rename", { name: "X" })).status === 400);
 
     // the enrolment page and its calls
@@ -822,7 +822,7 @@ async function routes(sock) {
     const mine = await s.req("GET", "/joya-ai/voiceprint/enrol?person=" + meId, { cookie: ad.cookie });
     check("  for my own voiceprint: no consent note", mine.status === 200 && !/id="vpe-consent"/.test(mine.body));
     const ep = await s.req("GET", "/joya-ai/voiceprint/enrol?person=" + zid, { cookie: ad.cookie });
-    check("  for Zaghloul: his name and the consent note “Only record someone who agreed to it”", ep.status === 200 && /id="vpe-consent"/.test(ep.body) && /Only record someone who agreed to it/.test(ep.body) && /Zaghloul/.test(ep.body) && new RegExp(`data-person="${zid}"`).test(ep.body));
+    check("  for Omar: his name and the consent note “Only record someone who agreed to it”", ep.status === 200 && /id="vpe-consent"/.test(ep.body) && /Only record someone who agreed to it/.test(ep.body) && /Omar/.test(ep.body) && new RegExp(`data-person="${zid}"`).test(ep.body));
     check("the enrolment page renders (4 paragraphs, no inline script or style)", ep.status === 200 && (ep.body.match(/data-rec="e\d"/g) || []).length === 4 && !/\sstyle="/.test(ep.body) && !/<script(?![^>]*\bsrc=)[^>]*>[^<]/.test(ep.body.replace(/<script type="application\/(ld\+)?json"[\s\S]*?<\/script>/g, "")));
     check("  not for a role without voice.manage", (await s.req("GET", "/joya-ai/voiceprint/enrol?person=" + zid, { cookie: op.cookie })).status === 403);
     const ecsrf = s.csrfOf(ep.body);
@@ -835,7 +835,7 @@ async function routes(sock) {
     check("  each clip is learned at once; the total grows", tot === 36, tot);
     check("  nothing of the audio is kept on disk", !fs.readdirSync(s.data, { recursive: true }).some((f) => /headset/.test(String(f))));
     const save = await s.req("POST", "/joya-ai/api/voiceprint/enrol-save", { cookie: ad.cookie, body: { person: zid, mic: "headset" }, headers: { "X-CSRF-Token": ecsrf } });
-    check("  saved: Zaghloul is enrolled (headset); AbdElMoniem's print untouched", save.status === 200 && JSON.parse(save.body).name === "Zaghloul" && JSON.parse(save.body).mics.join() === "headset" && Object.keys(peopleJson().people.find((x) => x.id === meId).mics).join() === "laptop", save.body);
+    check("  saved: Omar is enrolled (headset); Sara's print untouched", save.status === 200 && JSON.parse(save.body).name === "Omar" && JSON.parse(save.body).mics.join() === "headset" && Object.keys(peopleJson().people.find((x) => x.id === meId).mics).join() === "laptop", save.body);
     const st = await s.req("GET", "/joya-ai/api/voiceprint/enrol-status?person=" + zid + "&mic=headset", { cookie: ad.cookie });
     check("  and the pending sums are gone", JSON.parse(st.body).clips.length === 0);
     const bad = await rawPost("/joya-ai/api/voiceprint/enrol-clip?person=" + zid + "&mic=headset&id=e1", wav24(1000, 1), { "X-CSRF-Token": ecsrf });
@@ -849,9 +849,9 @@ async function routes(sock) {
 
     // remove a mic, delete, delete everything
     db.voiceprintChecksDeleteAll();
-    db.voiceprintCheckInsert({ ts: Date.now(), actor: "vpadmin", verdict: "accept", score: 0.6, acted: "shadow", speaker_id: zid, speaker: "Zaghloul" });
+    db.voiceprintCheckInsert({ ts: Date.now(), actor: "vpadmin", verdict: "accept", score: 0.6, acted: "shadow", speaker_id: zid, speaker: "Omar" });
     pg = await page();
-    check("the last 7 days are shown per person, with the histogram", /id="vp-stats"/.test(pg.body) && /<svg class="vp-hist"/.test(pg.body) && /1<\/b> turns checked/.test(pg.body) && /Zaghloul/.test(pg.body.slice(pg.body.indexOf('id="vp-stats"'))), pg.body.slice(pg.body.indexOf('id="vp-stats"'), pg.body.indexOf('id="vp-stats"') + 600));
+    check("the last 7 days are shown per person, with the histogram", /id="vp-stats"/.test(pg.body) && /<svg class="vp-hist"/.test(pg.body) && /1<\/b> turns checked/.test(pg.body) && /Omar/.test(pg.body.slice(pg.body.indexOf('id="vp-stats"'))), pg.body.slice(pg.body.indexOf('id="vp-stats"'), pg.body.indexOf('id="vp-stats"') + 600));
     // more people, to the limit of 10
     for (let i = 0; i < 8; i++) await post("/joya-ai/settings/voice/voiceprint/people", { name: "Guest " + i });
     r = await post("/joya-ai/settings/voice/voiceprint/people", { name: "Eleven" });
@@ -860,9 +860,9 @@ async function routes(sock) {
     for (const x of peopleJson().people.filter((x) => /^Guest/.test(x.name))) await post(`/joya-ai/settings/voice/voiceprint/people/${x.id}/delete`, {});
     r = await post(`/joya-ai/settings/voice/voiceprint/people/${zid}/remove-mic`, { mic: "headset" });
     pg = await page();
-    check("remove Zaghloul's only microphone: he stays, not enrolled; the gate stays (AbdElMoniem is stored)", r.status === 200 && peopleJson().people.some((x) => x.id === zid) && /not enrolled/.test(pg.body) && db.getSetting("voiceprint_gate") === "on");
+    check("remove Omar's only microphone: he stays, not enrolled; the gate stays (Sara is stored)", r.status === 200 && peopleJson().people.some((x) => x.id === zid) && /not enrolled/.test(pg.body) && db.getSetting("voiceprint_gate") === "on");
     r = await post(`/joya-ai/settings/voice/voiceprint/people/${zid}/delete`, {});
-    check("delete Zaghloul: only his; audited", r.status === 200 && peopleJson().people.map((x) => x.name).join() === "vpadmin" && db.recentLogins(10).some((x) => /deleted Zaghloul's voiceprint/.test(x.detail || "")), JSON.stringify(peopleJson().people.map((x) => x.name)));
+    check("delete Omar: only his; audited", r.status === 200 && peopleJson().people.map((x) => x.name).join() === "vpadmin" && db.recentLogins(10).some((x) => /deleted Omar's voiceprint/.test(x.detail || "")), JSON.stringify(peopleJson().people.map((x) => x.name)));
     r = await post("/joya-ai/settings/voice/voiceprint/forget-all", {});
     check("delete everything: voiceprint, ledger, the key; the gate off", r.status === 200 && (!fs.existsSync(path.join(vpFile, "people.json")) || peopleJson().people.length === 0) && db.voiceprintChecksSince(0, "vpadmin").length === 0 && JSON.parse(fs.readFileSync(path.join(s.data, "fake-vp-forget.json"), "utf8")).keepKey === false && db.getSetting("voiceprint_gate") === "off", r.body);
     check("  audited with counts only", db.recentLogins(30).some((x) => /deleted everything \(1 voiceprints, key deleted, 0 result folders, 1 check rows\)/.test(x.detail || "")), db.recentLogins(5).map((x) => x.detail).join("\n"));
@@ -878,13 +878,13 @@ function pure() {
   section("the state pill's words (public/cc-logic.js vpBadge)");
   const ML = require(path.join(ROOT, "public", "cc-logic.js"));
   const b = (k, g, n, t) => ML.vpBadge(k, g, n, t);
-  check("recognised: “Recognised: AbdElMoniem”, joya, a check", b("known", true, "AbdElMoniem").label === "Recognised: AbdElMoniem" && b("known", false, "AbdElMoniem").tone === "ok" && b("known", true, "AbdElMoniem").icon === "you");
-  check("a stored person who may not give commands: “Zaghloul — talk only”, neutral", b("known", true, "Zaghloul", true).label === "Zaghloul — talk only" && b("known", true, "Zaghloul", true).tone === "mid");
+  check("recognised: “Recognised: Sara”, joya, a check", b("known", true, "Sara").label === "Recognised: Sara" && b("known", false, "Sara").tone === "ok" && b("known", true, "Sara").icon === "you");
+  check("a stored person who may not give commands: “Omar — talk only”, neutral", b("known", true, "Omar", true).label === "Omar — talk only" && b("known", true, "Omar", true).tone === "mid");
   check("unknown voice: red; gate on 'Didn't recognise your voice, try again' (2026-10-21: no longer dropped silently), shadow '— would be ignored'", b("other", true).label === "Didn't recognise your voice, try again" && b("other", false).label === "Unknown voice — would be ignored" && b("other", true).tone === "bad");
   check("unsure: “Not sure who's speaking”, neutral; gate on '— not answered'; too short: the same words", b("unsure", false).label === "Not sure who's speaking" && b("unsure", true).label === "Not sure who's speaking — not answered" && b("short", true).label === "Not sure who's speaking" && b("unsure", true).tone === "mid");
   check("JOYA AI's own voice: red, ignored / would be", /own voice — ignored$/.test(b("echo", true).label) && /would be ignored$/.test(b("echo", false).label));
   check("a name is one line, cut at 40", b("known", true, "A\nB").label === "Recognised: A B" && b("known", true, "x".repeat(60)).label.length <= 12 + 40);
-  check("nothing for an unknown kind; no number anywhere", b("error", true) === null && ["known", "other", "echo", "unsure", "short"].every((k) => !/\d/.test(b(k, true, "Zaghloul").label + b(k, false).label)));
+  check("nothing for an unknown kind; no number anywhere", b("error", true) === null && ["known", "other", "echo", "unsure", "short"].every((k) => !/\d/.test(b(k, true, "Omar").label + b(k, false).label)));
   check("shown 1.5-2.6 s", ML.VP_MIN_MS === 1500 && ML.VP_SHOW_MS === 2600);
 }
 
@@ -905,8 +905,8 @@ async function pill(s, ad, chromium) {
     { name: "app peek", W: 1440, H: 852, q: "/joya-ai?shell=desktop&mode=peek", ua: APP_UA },
   ];
   const verdicts = [
-    ["known", true, "Recognised: AbdElMoniem", "ok", "AbdElMoniem", false],
-    ["known", false, "Zaghloul — talk only", "mid", "Zaghloul", true],
+    ["known", true, "Recognised: Sara", "ok", "Sara", false],
+    ["known", false, "Omar — talk only", "mid", "Omar", true],
     ["other", true, "Didn't recognise your voice, try again", "bad"],
     ["other", false, "Unknown voice — would be ignored", "bad"],
     ["unsure", true, "Not sure who's speaking — not answered", "mid"],
@@ -1055,11 +1055,11 @@ async function browser(s, ad) {
         await page.waitForTimeout(600);
         await page.waitForLoadState("networkidle").catch(() => {});
         // add a person from the page: name + spoken name -> their enrolment page, with the consent note
-        const nm = "Zaghloul " + (++addN);
+        const nm = "Omar " + (++addN);
         await page.goto(`http://127.0.0.1:${s.port}/joya-ai/settings/voice#v-vp-people`);
         await page.waitForSelector("#vp-add");
         await page.fill('#vp-add input[name="name"]', nm);
-        await page.fill('#vp-add input[name="spoken"]', "زغلول");
+        await page.fill('#vp-add input[name="spoken"]', "عمر");
         await Promise.all([page.waitForURL(/\/joya-ai\/voiceprint\/enrol\?person=p[0-9a-f]+/, { timeout: 6000 }).catch(() => {}), page.click("#vp-add-btn")]);
         check(tag + ": Add and enrol opens the person's enrolment page", /\/joya-ai\/voiceprint\/enrol\?person=p[0-9a-f]+/.test(page.url()), page.url());
         await page.waitForSelector("#vpe");
@@ -1129,14 +1129,14 @@ async function real() {
     check("the real service starts on its socket", await until(() => fs.existsSync(sock), 15000), out);
     await sleep(300);
     const vp = vpLib.createVoiceprint({ db, priv: fakePriv(dir), dataDir: dir, socketPath: sock, log: () => {}, parseWav: trialLib.parseWav });
-    const meP = vp.addPerson({ name: "AbdElMoniem", spoken: "", user_id: 99, may_command: true });
+    const meP = vp.addPerson({ name: "Sara", spoken: "", user_id: 99, may_command: true });
     for (const id of ["e1", "e2", "e3", "e4"]) {
       const w = trialLib.parseWav(fs.readFileSync(path.join(userDir, "laptop", id + ".wav")));
       await vp.enrolClip(meP.id, "laptop", id, Buffer.from(w.samples.buffer, w.samples.byteOffset, w.samples.length * 2), w.rate);
     }
     const en = await vp.enrolSave(meP.id, "laptop");
     check("enrolled from the administrator's own trial paragraphs (the guided enrolment's calls)", en.speech_s > 30, JSON.stringify(en));
-    // "Zaghloul": a public speaker as the stand-in (LibriSpeech test-clean 1089, CC-BY-4.0), 16 kHz FLAC -> PCM
+    // "Omar": a public speaker as the stand-in (LibriSpeech test-clean 1089, CC-BY-4.0), 16 kHz FLAC -> PCM
     const LS = "/root/.local/joya-voiceprint/data/LibriSpeech/test-clean/1089";
     let zFiles = [];
     if (fs.existsSync(LS)) {
@@ -1146,12 +1146,12 @@ async function real() {
       require("child_process").execFileSync(PY, ["-c", py]);
       zFiles = fs.readdirSync(zDir).sort().map((f) => path.join(zDir, f));
     }
-    const Zp = zFiles.length ? vp.addPerson({ name: "Zaghloul", spoken: "زغلول" }) : null;
+    const Zp = zFiles.length ? vp.addPerson({ name: "Omar", spoken: "عمر" }) : null;
     if (Zp) {
       // enrol from the first 8 utterances (as 4 "paragraphs" of two), test on the rest
       for (let i = 0; i < 4; i++) await vp.enrolClip(Zp.id, "laptop", "e" + (i + 1), Buffer.concat([fs.readFileSync(zFiles[2 * i]), fs.readFileSync(zFiles[2 * i + 1])]), 16000);
       const zs = await vp.enrolSave(Zp.id, "laptop");
-      check(`Zaghloul (a public speaker as the stand-in) enrolled: ${zs.speech_s} s`, zs.speech_s > 20, JSON.stringify(zs));
+      check(`Omar (a public speaker as the stand-in) enrolled: ${zs.speech_s} s`, zs.speech_s > 20, JSON.stringify(zs));
     }
     const up24 = (x) => {
       const n = Math.floor((x.length * 3) / 2);
@@ -1174,16 +1174,16 @@ async function real() {
     const tests = fs.readdirSync(path.join(userDir, "laptop")).filter((f) => /^t\d+\.wav$/.test(f));
     const mine = [];
     for (const f of tests) mine.push(await vp.check(to24(path.join(userDir, "laptop", f)).subarray(0, 4000 * 48), {}));
-    const acc = mine.filter((r) => r.verdict === "accept" && r.speaker && r.speaker.name === "AbdElMoniem").length;
+    const acc = mine.filter((r) => r.verdict === "accept" && r.speaker && r.speaker.name === "Sara").length;
     const notRejected = mine.filter((r) => r.verdict !== "reject").length;
-    const wrong = mine.filter((r) => r.speaker && r.speaker.name !== "AbdElMoniem").length;
-    check(`1-vs-N, your real phrases: ${acc} of ${mine.length} named AbdElMoniem, none rejected, none named Zaghloul`, acc >= mine.length - 2 && notRejected === mine.length && wrong === 0, JSON.stringify(mine.map((r) => [r.verdict, r.speaker && r.speaker.name, r.score, r.second])));
+    const wrong = mine.filter((r) => r.speaker && r.speaker.name !== "Sara").length;
+    check(`1-vs-N, your real phrases: ${acc} of ${mine.length} named Sara, none rejected, none named Omar`, acc >= mine.length - 2 && notRejected === mine.length && wrong === 0, JSON.stringify(mine.map((r) => [r.verdict, r.speaker && r.speaker.name, r.score, r.second])));
     if (Zp) {
       const zr = [];
       for (const f of zFiles.slice(8)) zr.push(await vp.check(pcm24(f).subarray(0, 4000 * 48), {}));
-      const zAcc = zr.filter((r) => r.verdict === "accept" && r.speaker && r.speaker.name === "Zaghloul").length;
-      const zWrong = zr.filter((r) => r.speaker && r.speaker.name !== "Zaghloul").length;
-      check(`1-vs-N, Zaghloul's other utterances: ${zAcc} of ${zr.length} named Zaghloul, none named AbdElMoniem`, zAcc >= zr.length - 2 && zWrong === 0, JSON.stringify(zr.map((r) => [r.verdict, r.speaker && r.speaker.name, r.score, r.second])));
+      const zAcc = zr.filter((r) => r.verdict === "accept" && r.speaker && r.speaker.name === "Omar").length;
+      const zWrong = zr.filter((r) => r.speaker && r.speaker.name !== "Omar").length;
+      check(`1-vs-N, Omar's other utterances: ${zAcc} of ${zr.length} named Omar, none named Sara`, zAcc >= zr.length - 2 && zWrong === 0, JSON.stringify(zr.map((r) => [r.verdict, r.speaker && r.speaker.name, r.score, r.second])));
       // A -> B -> A, through the library's "current speaker": each named on their own turns
       const seq = [];
       let cur = null;
@@ -1192,7 +1192,7 @@ async function real() {
         if (r.speaker) cur = { id: r.speaker.id, at: Date.now() };
         seq.push(who + ":" + (r.speaker ? r.speaker.name : r.verdict));
       }
-      check(`speaker changes A → B → A → B → A with real voices: ${seq.join(" ")}`, seq.join() === "A:AbdElMoniem,B:Zaghloul,A:AbdElMoniem,B:Zaghloul,A:AbdElMoniem", seq.join());
+      check(`speaker changes A → B → A → B → A with real voices: ${seq.join(" ")}`, seq.join() === "A:Sara,B:Omar,A:Sara,B:Omar,A:Sara", seq.join());
     }
     const others = [];
     const pub = "/root/.local/joya-voiceprint/data/public/cv-ar";

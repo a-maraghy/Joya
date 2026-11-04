@@ -344,7 +344,7 @@
   /**
    * Who is speaking, on the state pill (the relay's {type: "voiceprint", kind, gated, name, talkOnly}):
    * { label, tone: "ok" | "bad" | "mid", icon: "you" | "no" | "q" } -- never a score.
-   *   known  a stored voiceprint, by name ("Recognised: Zaghloul"; "Zaghloul — talk only" when
+   *   known  a stored voiceprint, by name ("Recognised: Omar"; "Omar — talk only" when
    *          that person may not give commands and was answered in conversation only)
    *   other  an unknown voice; echo: JOYA AI's own voice coming back
    *   unsure not sure who's speaking (gate: not answered; nothing is ever spoken); short: too little speech (let through)

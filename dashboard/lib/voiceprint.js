@@ -337,7 +337,7 @@ function createVoiceprint(deps) {
       if (!old || !old.sealed) continue;
       const uid = Number(f.replace(".json", ""));
       const u = d.userById ? d.userById(uid) : null;
-      const named = (u && MIGRATE_NAMES[u.username]) || null;
+      const named = (u && (d.migrateNames || MIGRATE_NAMES)[u.username]) || null;
       const nm = cleanName(named ? named.name : (u && (u.display_name || u.username)) || "Person " + uid);
       store.people.push({
         id: newId(),

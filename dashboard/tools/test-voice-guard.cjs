@@ -120,7 +120,7 @@ const REAL_SPEECH = [
   }
   check("the vocabulary list: names only is an echo, names in a request are not", !!guard.echoOf("Odoo, Claude, PMO") && !guard.echoOf("Odoo is down, tell Claude"));
   check("thresholds as documented", guard.RUN_ALONE === 8 && guard.RUN_WITH_OVERLAP === 5 && guard.OVERLAP === 0.6);
-  check("the transcription prompt is a vocabulary list now, not a sentence", voice.TRANSCRIBE_PROMPT_KIND === "list" && !/Someone talking/.test(voice.TRANSCRIBE_PROMPT) && /JOYA AI/.test(voice.TRANSCRIBE_PROMPT) && /Joya\b/.test(voice.TRANSCRIBE_PROMPT) && !/JOYA/.test(voice.TRANSCRIBE_PROMPT) && /Odoo/.test(voice.TRANSCRIBE_PROMPT));
+  check("the transcription prompt is a vocabulary list now, not a sentence", voice.TRANSCRIBE_PROMPT_KIND === "list" && !/Someone talking/.test(voice.TRANSCRIBE_PROMPT) && /JOYA AI/.test(voice.TRANSCRIBE_PROMPT) && /Joya\b/.test(voice.TRANSCRIBE_PROMPT) && /Odoo/.test(voice.TRANSCRIBE_PROMPT));
   check("the echo guard compares against the prompt in use (Joya)", guard.promptSources().some((s) => s.name === "transcription prompt" && s.text === voice.TRANSCRIBE_PROMPT && /JOYA AI/.test(s.text)));
   check("and against the summary instructions in use (JOYA AI); the desk's are gone", guard.promptSources().some((s) => s.name === "summary instructions" && s.text === shared.SUMMARY_INSTRUCTIONS && /JOYA AI/.test(s.text)) && !guard.promptSources().some((s) => /desk/.test(s.name)));
   check("the old sentence prompt stays a guarded source", guard.promptSources().some((s) => s.text === guard.LEGACY_TRANSCRIBE_PROMPT));

@@ -595,7 +595,7 @@ async function main() {
   check("posts the configured model and the recording with its type",
     t.model === "gpt-4o-mini-transcribe" && t.type === "audio/webm" && t.filename === "speech.webm", JSON.stringify(t));
   check("with the key as a bearer token", t.auth === "Bearer " + GOOD);
-  check("with a vocabulary prompt (Joya, JOYA AI, Odoo), and no JOYA", !/JOYA/.test(t.prompt || "") && /Joya/.test(t.prompt || "") && /JOYA AI/.test(t.prompt || "") && /Odoo/.test(t.prompt || ""), t.prompt);
+  check("with a vocabulary prompt (Joya, JOYA AI, Odoo)", /Joya/.test(t.prompt || "") && /JOYA AI/.test(t.prompt || "") && /Odoo/.test(t.prompt || ""), t.prompt);
   await voice.transcribe(Buffer.from("x"), cfg({ transcribe_model: "gpt-4o-transcribe" }), "audio/ogg;codecs=opus");
   const t2 = mock.transcriptions[mock.transcriptions.length - 1];
   check("the listening model is a setting; an odd mime falls back to webm", t2.model === "gpt-4o-transcribe" && t2.type === "audio/webm", JSON.stringify(t2));
