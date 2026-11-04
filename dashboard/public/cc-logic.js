@@ -270,7 +270,7 @@
     { role: "hired", head: "cap", label: "Hired", hired: true },
     { role: "planning", head: "mortar", label: "Planning", re: /\bplan(?:s|ning|ner|ners)?\b|\bmandate\b|\ballocation\b/i },
     { role: "erp", head: "headset", label: "Odoo / ERP", re: /\bodoo\b|\berp\b|\bgiza(?:seeds)?\b/i },
-    { role: "builder", head: "antennas", label: "Joya / builder", re: /\bmint ?os\b|\bmoni ?ai\b|\bmoni_ai_os\b|\bdashboard\b|\bdesktop\b|\bbuilder\b|\bclaude ?agents\b/i },
+    { role: "builder", head: "antennas", label: "Joya / builder", re: /\bjoya\b|\bdashboard\b|\bdesktop\b|\bbuilder\b|\bclaude ?agents\b/i },
   ];
   var BOT_ROLE_DEFAULT = { role: "other", head: "headphones", label: "Other" };
   /** A session's role and the head it wears by default: botRole({name, cwd, hired, hire}) -> {role, head, label}. */

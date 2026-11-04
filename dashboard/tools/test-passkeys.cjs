@@ -132,13 +132,13 @@ async function code(user, secret) {
     /* ------------------------------------------- the allow-list itself --- */
     console.log("relying-party allow-list (lib/passkeys.js)");
     {
+      process.env.JOYA_PUBLIC_HOST = "joya.example.com";
       const pk = require(path.join(__dirname, "..", "lib", "passkeys.js"));
       const R = (host, extra) => ({ headers: Object.assign({ host }, extra || {}) });
       pk.configure("");
-      check("defaults: joya.example.com and the old :8443 address", pk.allowedHosts().join(" ") === "joya.example.com joya.example.com");
+      check("default: the install's own address", pk.allowedHosts().join(" ") === "joya.example.com");
       check("joya.example.com -> its https origin", JSON.stringify(pk.rpFor(R("joya.example.com"))) === JSON.stringify({ rpID: "joya.example.com", origin: "https://joya.example.com" }));
-      check("the old address keeps its port in the origin", pk.rpFor(R("joya.example.com")).origin === "https://joya.example.com:8443");
-      check("Host is matched without case or port", !!pk.rpFor(R("OS.Joya-Stack.com:443")));
+      check("Host is matched without case or port", !!pk.rpFor(R("JOYA.Example.com:443")));
       check("a host off the list gets nothing", pk.rpFor(R("evil.example")) === null && pk.rpFor(R("example.com")) === null && pk.rpFor(R("")) === null);
       check("X-Forwarded-Host is ignored", pk.rpFor(R("evil.example", { "x-forwarded-host": "joya.example.com" })) === null);
       pk.configure("not a url, ftp://x.example, https://ok.example");

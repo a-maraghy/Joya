@@ -33,7 +33,8 @@ const {
 } = require("@simplewebauthn/server");
 const { db, nowIso } = require("./db");
 
-const DEFAULT_ORIGINS = ["https://joya.example.com", "https://joya.example.com:8443"];
+// Default: this install's own address (JOYA_PUBLIC_HOST, set by the installer).
+const DEFAULT_ORIGINS = ["https://" + (process.env.JOYA_PUBLIC_HOST || "localhost")];
 const RP_NAME = "Joya";
 // A challenge outlives the browser's own prompt (60 s) a little, and no more.
 const CHALLENGE_MS = 2 * 60 * 1000;

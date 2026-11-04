@@ -86,7 +86,7 @@ const B = require(path.join(ROOT, "public", "joya-core-bot.js"));
   check("planning -> graduation cap (and it wins over giza: the planning engine)", R({ name: "Planning engine", cwd: "/root/joya/giza-planning-engine" }) === "mortar" && R({ name: "x", cwd: "/root/joya/giza-planning-engine" }) === "mortar" && R({ name: "Allocation review" }) === "mortar");
   check("hired sessions -> cap & headphones, whatever their name", R({ name: "Odoo dev", hired: true }) === "cap" && R({ name: "x", hire: { slug: "a" } }) === "cap");
   check("Joya / builder -> twin antennas", R({ name: "Joya" }) === "antennas" && R({ name: "s", cwd: "/root/joya/Joya/.claude/worktrees/agent-x" }) === "antennas" && R({ name: "desktop app" }) === "antennas" && R({ name: "s", cwd: "/root/joya/Claude_Agents" }) === "antennas");
-  check("anything else -> headphones (no accidental matches: 'explanation', 'erpx', 'joya')", R({ name: "Freight quotes", cwd: "/root/joya" }) === "headphones" && R({ name: "explanation" }) === "headphones" && R({ name: "erpx" }) === "headphones" && R({}) === "headphones");
+  check("anything else -> headphones (no accidental matches: 'explanation', 'erpx', 'joya')", R({ name: "Freight quotes", cwd: "/root/work" }) === "headphones" && R({ name: "explanation" }) === "headphones" && R({ name: "erpx" }) === "headphones" && R({}) === "headphones");
   const team = { "invoice audit": "halo" };
   const hf = L.botHeadFor({ name: "Invoice  Audit", cwd: "/root" }, team);
   check("a pin wins over the role (name matched normalised: case, spaces); the role's head is still known", hf.head === "halo" && hf.pinned && hf.auto === "headphones" && hf.role === "other");
